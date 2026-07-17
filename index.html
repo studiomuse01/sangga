@@ -59,7 +59,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f8fafc}
 .seg{display:flex;gap:6px;margin-bottom:10px}
 .seg button{flex:1;justify-content:center}
 .seg button.on{background:var(--grad);color:#fff;border:none;box-shadow:0 4px 12px rgba(99,102,241,.3)}
-.copybox{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:18px;white-space:pre-wrap;line-height:1.7}
+.copybox{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;white-space:pre-wrap;line-height:1.6}
 @media print{
   body *{visibility:hidden}
   #printArea,#printArea *{visibility:visible}
@@ -79,7 +79,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f8fafc}
   <button class="btn" style="width:270px;justify-content:center" onclick="fbSignup()">처음이신가요? 회원가입</button>
   <a href="#" style="color:#64748b;font-size:12px" onclick="fbReset();return false">비밀번호를 잊으셨나요?</a>
   <div id="lockMsg" style="color:#f87171;font-size:13px;min-height:18px;text-align:center"></div>
-  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0714h</div>
+  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0714a</div>
 </div>
 
 <div class="mobiletop"><div id="brand">🏢 상가관리비 <small id="brandSub"></small></div>
@@ -92,12 +92,6 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f8fafc}
 <div id="printArea" style="display:none"></div>
 <input type="file" id="importFile" accept=".json" style="display:none">
 
-<script>
-/* 오류 진단: 문제가 생기면 로그인 화면에 원인을 표시 */
-window.addEventListener('error',function(e){var el=document.getElementById('lockMsg');if(el&&e.message)el.textContent='⚠️ 오류: '+e.message;});
-window.addEventListener('unhandledrejection',function(e){var el=document.getElementById('lockMsg');var r=e.reason;if(el)el.textContent='⚠️ 오류: '+((r&&(r.code||r.message))||r||'알 수 없음');});
-setTimeout(function(){if(!window.fbLogin){var el=document.getElementById('lockMsg');if(el)el.textContent='⚠️ 로그인 모듈을 불러오지 못했습니다 — 인터넷 연결을 확인하고, 카카오톡 안이 아닌 사파리/크롬 브라우저에서 열어주세요';}},4000);
-</script>
 <script>
 /* ═══════════ 기본 ═══════════ */
 const DBKEY='bldgadmin_v1';
@@ -115,27 +109,9 @@ function fmtPhoneInput(el){const d=el.value.replace(/[^0-9]/g,'').slice(0,11);le
   if(d.length>7)out=d.slice(0,3)+'-'+d.slice(3,d.length-4)+'-'+d.slice(-4);
   else if(d.length>3)out=d.slice(0,3)+'-'+d.slice(3);el.value=out;}
 
-/* ── 2개월 청구 주기: 기록의 연월 = 청구기간 첫 달 (예: 2026-05 → 5·6월분, 지침 5.1→7.1) ── */
-const perMonths=ym=>{const m=Number(ym.slice(5,7));const m2=m===12?1:m+1;const m3=m2===12?1:m2+1;return[m,m2,m3];};
-const perLabel=ym=>{const[a,b]=perMonths(ym);return a+'·'+b+'월';};
-/* 오늘이 속한 청구기간 (1·2, 3·4, 5·6, 7·8, 9·10, 11·12월) */
-const curPeriodYM=()=>{const t=todayStr();const m=Number(t.slice(5,7));const st=m%2===1?m:m-1;return t.slice(0,4)+'-'+pad(st);};
-/* 공과금 입력 항목 (고지서 금액 입력칸) */
-const utilFields=ym=>{const[a,b]=perMonths(ym);return[
- ['water1','1층 수도'],
- ['water2','2층 수도'],
- ['waterCommon','공용수도'],
- ['water3','3층 수도'],
- ['elec1','공용전기 '+a+'월'],
- ['elec2','공용전기 '+b+'월'],
- ['septic','정화조 청소비'],
- ['safety','전기·소방안전관리비'],
- ['mgmt','상가관리비'],
- ['clean','상가청소비'],
- ['etc','기타비용']];};
-/* 업체별 분담 가중치 항목 (수도 1·2층은 계량기 사용량 기준 배분) */
+/* 비용 항목 정의 (water12는 사용량 기반 전용요금) */
 const COSTS=[
- ['water12','수도(1·2층 계량)'],
+ ['water12','1·2층 수도'],
  ['waterCommon','공용수도'],
  ['water3','3층 수도'],
  ['elec','공용전기'],
@@ -144,11 +120,6 @@ const COSTS=[
  ['mgmt','상가관리비'],
  ['clean','상가청소비'],
  ['etc','기타비용']];
-/* 청구 항목 키 → 표시명 */
-const ITEM_KEYS=['water12','waterCommon','water3','elec1','elec2','septic','safety','mgmt','clean','etc'];
-const itemLabel=(k,ym)=>{const[a,b]=perMonths(ym);return{water12:'수도(1·2층)',waterCommon:'공용수도',water3:'3층 수도',elec1:'공용전기 '+a+'월',elec2:'공용전기 '+b+'월',septic:'정화조 청소비',safety:'전기·소방안전관리비',mgmt:'상가관리비',clean:'상가청소비',etc:'기타비용'}[k]||k;};
-/* 공용비 배분: [금액키, 가중치키] — 전기 1·2는 같은 가중치(elec) 사용 */
-const SHARE=[['waterCommon','waterCommon'],['water3','water3'],['elec1','elec'],['elec2','elec'],['septic','septic'],['safety','safety'],['mgmt','mgmt'],['clean','clean'],['etc','etc']];
 
 function load(){
   try{const d=JSON.parse(localStorage.getItem(DBKEY));if(d&&d.shops)return d;}catch(e){}
@@ -157,12 +128,8 @@ function load(){
 let db=load();
 function migrateDb(){
   db.shops=db.shops||[];db.months=db.months||{};db.ledger=db.ledger||[];
-  db.settings=Object.assign({buildingName:'우리상가',account:'',mgr:'',unitRound:10,dispRound:100,shareRound:10,lastBackup:'',curPeriod:'',openBal:{}},db.settings||{});
+  db.settings=Object.assign({buildingName:'우리상가',account:'',mgr:'',unitRound:10,dispRound:100,shareRound:10,lastBackup:''},db.settings||{});
   db.shops.forEach(s=>{s.part=s.part||{};COSTS.forEach(([k])=>{if(s.part[k]==null)s.part[k]=1;});});
-  // 구버전 데이터 이관: water12 금액→water1, elec→elec1
-  Object.values(db.months||{}).forEach(M=>{if(!M.utils)return;
-    if(M.utils.water12!=null&&M.utils.water1==null){M.utils.water1=M.utils.water12;delete M.utils.water12;}
-    if(M.utils.elec!=null&&M.utils.elec1==null){M.utils.elec1=M.utils.elec;delete M.utils.elec;}});
 }
 migrateDb();
 const S=()=>db.settings;
@@ -200,13 +167,13 @@ function calcMonth(ym){
     const base=Number(mt.base)||0, curr=Number(mt.curr)||0;
     let u=curr-base;
     if(u<0){warns.push('🚨 '+s.name+': 검침값 역전(사용량 음수) — 0으로 처리');u=0;}
-    const pm=db.months[prevYM(ym,2)];
+    const pm=db.months[prevYM(ym,1)];
     const pu=pm&&pm.charges&&pm.charges[s.id]?pm.charges[s.id].usage:null;
-    if(pu!=null&&pu>0&&u>pu*3)warns.push('⚠️ '+s.name+': 이상 사용량 (전기간 '+pu+'톤 → 금기간 '+u+'톤)');
+    if(pu!=null&&pu>0&&u>pu*3)warns.push('⚠️ '+s.name+': 이상 사용량 (전월 '+pu+'톤 → 금월 '+u+'톤)');
     charges[s.id].usage=u;totalU+=u;
   });
-  // ── 1·2층 수도 (1층+2층 고지서 합산 → 사용량 비례 배분) ──
-  const wAmt=(Number((M.utils||{}).water1)||0)+(Number((M.utils||{}).water2)||0);
+  // ── 1·2층 전용 수도 ──
+  const wAmt=Number((M.utils||{}).water12)||0;
   if(wAmt>0){
     if(totalU<=0){warns.push('🚨 1·2층 수도: 사용량 합계가 0 — 지침을 입력하세요');}
     else{
@@ -219,19 +186,18 @@ function calcMonth(ym){
         shops.forEach(s=>{const w=s.part.water12||0;if(w>0){const v=roundTo(diff*w/tw,st.shareRound);charges[s.id].items.water12+=v;dsum+=v;}});
       }
       const absorbed=diff-dsum;
-      recon.push({label:'수도 1·2층 합산 (단가 '+fmt(unit)+'/톤)',amt:wAmt,tw:totalU+'톤',
+      recon.push({label:'1·2층 수도 (단가 '+fmt(unit)+'/톤)',amt:wAmt,
         sum:shops.reduce((a,s)=>a+(charges[s.id].items.water12||0),0),absorbed});
     }
   }
   // ── 공용비 분담 ──
-  SHARE.forEach(([k,wk])=>{
-    const label=itemLabel(k,ym);
+  COSTS.slice(1).forEach(([k,label])=>{
     const amt=Number((M.utils||{})[k])||0;if(amt<=0)return;
-    const tw=shops.reduce((a,s)=>a+(s.part[wk]||0),0);
-    if(tw<=0){recon.push({label,amt,sum:0,absorbed:amt,tw:0});warns.push('⚠️ '+label+': 참여 업체 없음(전액 미분담)');return;}
+    const tw=shops.reduce((a,s)=>a+(s.part[k]||0),0);
+    if(tw<=0){recon.push({label,amt,sum:0,absorbed:amt});warns.push('⚠️ '+label+': 참여 업체 없음(전액 미분담)');return;}
     let sum=0;
-    shops.forEach(s=>{const w=s.part[wk]||0;if(w>0){const v=roundTo(amt*w/tw,st.shareRound);charges[s.id].items[k]=v;sum+=v;}});
-    recon.push({label,amt,sum,absorbed:amt-sum,tw});
+    shops.forEach(s=>{const w=s.part[k]||0;if(w>0){const v=roundTo(amt*w/tw,st.shareRound);charges[s.id].items[k]=v;sum+=v;}});
+    recon.push({label,amt,sum,absorbed:amt-sum});
   });
   // ── 합계 ──
   shops.forEach(s=>{
@@ -260,27 +226,21 @@ const stBadge=s=>({'청구전':'b-gray','청구완료':'b-brand','납부완료':
 
 /* ═══════════ 화면 ═══════════ */
 let view='home',viewParam=null,navStack=[];
-let calcYM=(db.settings&&db.settings.curPeriod)||curPeriodYM(),payYM=calcYM,payTab='pay',shopEdit=null,invoiceShop=null;
+let calcYM=thisYM(),payYM=thisYM(),payTab='pay',shopEdit=null,invoiceShop=null;
 function go(v,p){if(view!==v||viewParam!==(p??null)){navStack.push([view,viewParam]);if(navStack.length>30)navStack.shift();}view=v;viewParam=p??null;render();window.scrollTo(0,0);}
 function goBack(){const pv=navStack.pop();if(pv){view=pv[0];viewParam=pv[1];render();window.scrollTo(0,0);}else go('home');}
 const TABS=[['home','🏠','홈'],['calc','🧮','계산'],['shops','🏬','업체'],['pay','💳','수납'],['settings','⚙️','설정']];
 
 function ymOptions(sel){
-  const years=new Set(Object.keys(db.months).map(k=>k.slice(0,4)));
-  years.add(String(new Date().getFullYear()));
-  if(sel)years.add(sel.slice(0,4));
-  const out=[];
-  [...years].sort().reverse().forEach(y=>{
-    for(let m=11;m>=1;m-=2){const k=y+'-'+pad(m);out.push(`<option value="${k}" ${k===sel?'selected':''}>${y}년 ${m}·${m+1}월</option>`);}
-  });
-  return out.join('');
+  const keys=Object.keys(db.months).sort().reverse();
+  if(!keys.includes(thisYM()))keys.unshift(thisYM());
+  return keys.map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k.replace('-','년 ')}월</option>`).join('');
 }
 function ensureMonth(ym){
   if(db.months[ym])return db.months[ym];
-  const[a,,c]=perMonths(ym);
-  const M={info:{billDate:todayStr(),due:'',mgr:S().mgr||'',note:'',baseDate:a+'.1',currDate:c+'.1'},utils:{},meters:{},pays:{},charges:{},recon:[],warns:[],confirmed:false,baseMode:'prev'};
-  // 기준지침 자동: 전 기간(2개월 전) 금월지침 → 이번 기간 기준
-  const pm=db.months[prevYM(ym,2)];
+  const M={info:{billDate:todayStr(),due:'',mgr:S().mgr||'',note:''},utils:{},meters:{},pays:{},charges:{},recon:[],warns:[],confirmed:false,baseMode:'prev'};
+  // 기준지침 자동: 전월 금월지침 → 이번달 기준
+  const pm=db.months[prevYM(ym,1)];
   activeShops().forEach(s=>{
     const prev=pm&&pm.meters&&pm.meters[s.id]?pm.meters[s.id].curr:'';
     M.meters[s.id]={base:prev||'',curr:''};
@@ -298,8 +258,8 @@ function vHome(){
   if(M&&M.confirmed)shops.forEach(s=>{const ch=M.charges[s.id];if(ch){tot+=ch.total;paid+=((M.pays||{})[s.id]||{}).paid||0;}});
   const unpaidList=M&&M.confirmed?shops.filter(s=>['미납','일부납부','청구완료'].includes(payStatus(M,s.id))):[];
   return `<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">🏠 ${esc(S().buildingName)}</h1><div class="spacer"></div>
-    <select style="width:auto" onchange="calcYM=this.value;S().curPeriod=this.value;save();render()">${ymOptions(ym)}</select></div>
-  <div class="card" style="padding:10px"><h2 style="font-size:16px">📊 ${perLabel(ym)} 현황 ${M&&M.confirmed?'<span class="badge b-ok">청구확정</span>':'<span class="badge b-gray">미확정</span>'}</h2>
+    <select style="width:auto" onchange="calcYM=this.value;render()">${ymOptions(ym)}</select></div>
+  <div class="card" style="padding:10px"><h2 style="font-size:16px">📊 ${ym.slice(5)}월 현황 ${M&&M.confirmed?'<span class="badge b-ok">청구확정</span>':'<span class="badge b-gray">미확정</span>'}</h2>
     <div class="grid2">
       <div class="item"><div class="k">총 청구액</div><div class="v" style="color:var(--brand)">${fmt(tot)}</div></div>
       <div class="item"><div class="k">총 수납액</div><div class="v" style="color:var(--ok)">${fmt(paid)}</div></div>
@@ -324,9 +284,9 @@ function vCalc(){
   const shops=activeShops();
   const waterShops=shops.filter(s=>(s.part.water12||0)>0);
   return `<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">🧮 관리비 계산</h1><div class="spacer"></div>
-    <select style="width:auto" onchange="calcYM=this.value;S().curPeriod=this.value;save();render()">${ymOptions(ym)}</select>
-    ${!M?`<button class="btn primary sm" onclick="ensureMonth('${ym}');render()">이 기간 시작</button>`:''}</div>
-  ${!M?`<div class="card"><div class="empty">[이 기간 시작]을 누르면 ${ym.slice(0,4)}년 ${perLabel(ym)}분 계산을 시작합니다.<br><span class="muted">전 기간 지침이 자동으로 기준지침에 입력됩니다.</span></div></div>`:`
+    <select style="width:auto" onchange="calcYM=this.value;render()">${ymOptions(ym)}</select>
+    ${!M?`<button class="btn primary sm" onclick="ensureMonth('${ym}');render()">이 달 시작</button>`:''}</div>
+  ${!M?`<div class="card"><div class="empty">[이 달 시작]을 누르면 ${ym.replace('-','년 ')}월 계산을 시작합니다.<br><span class="muted">전월 지침이 자동으로 기준지침에 입력됩니다.</span></div></div>`:`
   <div class="card"><h2>📋 기본정보 ${M.confirmed?'<span class="badge b-ok">확정됨</span>':''}</h2>
     <div class="grid2">
       <div><label>청구일</label><input type="date" value="${M.info.billDate||''}" onchange="db.months['${ym}'].info.billDate=this.value;save()"></div>
@@ -334,25 +294,21 @@ function vCalc(){
       <div><label>담당자</label><input value="${esc(M.info.mgr||'')}" onchange="db.months['${ym}'].info.mgr=this.value;save()"></div>
       <div><label>비고</label><input value="${esc(M.info.note||'')}" onchange="db.months['${ym}'].info.note=this.value;save()"></div>
     </div></div>
-  <div class="card"><h2>💡 공과금 입력 (${perLabel(ym)}분) <span class="muted" style="font-weight:400;font-size:15px">고지서 금액을 입력하세요</span></h2>
+  <div class="card"><h2>💡 공과금 입력 <span class="muted" style="font-weight:400">고지서 금액을 입력하세요</span></h2>
     <div class="grid2">
-    ${utilFields(ym).map(([k,label])=>`<div><label style="font-size:15px">${label}</label><input type="number" inputmode="numeric" style="font-size:15px" value="${(M.utils||{})[k]??''}" placeholder="0" onchange="db.months['${ym}'].utils['${k}']=Number(this.value)||0;save()"></div>`).join('')}
+    ${COSTS.map(([k,label])=>`<div><label>${label}</label><input type="number" inputmode="numeric" value="${(M.utils||{})[k]??''}" placeholder="0" onchange="db.months['${ym}'].utils['${k}']=Number(this.value)||0;save()"></div>`).join('')}
     </div></div>
-  <div class="card"><h2>🚰 계량기 입력 <span class="muted" style="font-weight:400;font-size:15px">1·2층 수도 참여 업체</span></h2>
-    <div class="grid2" style="margin-bottom:8px">
-      <div><label style="font-size:15px">기준지침 날짜</label><input style="font-size:15px" value="${esc(M.info.baseDate||'')}" placeholder="5.1" onchange="db.months['${ym}'].info.baseDate=this.value;save();render()"></div>
-      <div><label style="font-size:15px">금월지침 날짜</label><input style="font-size:15px" value="${esc(M.info.currDate||'')}" placeholder="7.1" onchange="db.months['${ym}'].info.currDate=this.value;save();render()"></div>
-    </div>
+  <div class="card"><h2>🚰 계량기 입력 <span class="muted" style="font-weight:400">1·2층 수도 참여 업체</span></h2>
     ${waterShops.length?`<div class="tablewrap"><table>
-      <tr><th style="font-size:15px">업체</th><th style="font-size:15px">기준지침 (${esc(M.info.baseDate||'')})</th><th style="font-size:15px">금월지침 (${esc(M.info.currDate||'')})</th><th style="font-size:15px">사용량</th></tr>
+      <tr><th>업체</th><th>기준지침</th><th>금월지침</th><th>사용량</th></tr>
       ${waterShops.map(s=>{const mt=M.meters[s.id]=M.meters[s.id]||{base:'',curr:''};
         const u=(Number(mt.curr)||0)-(Number(mt.base)||0);
-        return `<tr><td style="font-weight:700;white-space:nowrap;font-size:15px">${esc(s.unit)}호 ${esc(s.name)}</td>
-        <td><input type="number" inputmode="numeric" value="${mt.base??''}" style="min-width:80px;padding:7px;font-size:15px" onchange="db.months['${ym}'].meters['${s.id}'].base=this.value;save();render()"></td>
-        <td><input type="number" inputmode="numeric" value="${mt.curr??''}" style="min-width:80px;padding:7px;font-size:15px" onchange="db.months['${ym}'].meters['${s.id}'].curr=this.value;save();render()"></td>
-        <td style="font-weight:800;font-size:15px;${u<0?'color:var(--bad)':''}">${mt.curr===''?'-':u+'톤'}</td></tr>`;}).join('')}
+        return `<tr><td style="font-weight:700;white-space:nowrap">${esc(s.unit)}호 ${esc(s.name)}</td>
+        <td><input type="number" inputmode="numeric" value="${mt.base??''}" style="min-width:80px;padding:7px" onchange="db.months['${ym}'].meters['${s.id}'].base=this.value;save();render()"></td>
+        <td><input type="number" inputmode="numeric" value="${mt.curr??''}" style="min-width:80px;padding:7px" onchange="db.months['${ym}'].meters['${s.id}'].curr=this.value;save();render()"></td>
+        <td style="font-weight:800;${u<0?'color:var(--bad)':''}">${mt.curr===''?'-':u+'톤'}</td></tr>`;}).join('')}
     </table></div>
-    <div class="muted mt" style="font-size:15px">기준지침: 전 기간 지침이 자동 입력됩니다. 다른 값을 쓰려면 직접 수정하세요.</div>`
+    <div class="muted mt">기준지침: 전월 지침이 자동 입력됩니다. 두 달 전 지침을 쓰려면 직접 수정하세요.</div>`
     :'<div class="empty">1·2층 수도 참여 업체가 없습니다 (업체관리에서 가중치 설정)</div>'}</div>
   <div class="row" style="margin:12px 0">
     <button class="btn primary" style="flex:1;justify-content:center;font-size:16px" onclick="doCalc('${ym}')">⚡ 자동계산</button>
@@ -380,8 +336,8 @@ function vCalcResult(ym){
     <div class="muted mt">업체를 누르면 항목별 내역이 보입니다.</div></div>
   <div class="card"><h2>✅ 자동 검산</h2>
     <div class="tablewrap"><table>
-      <tr><th>항목</th><th>가중치 합</th><th>실제 청구액</th><th>분담금 합계</th><th>차액(흡수)</th></tr>
-      ${(M.recon||[]).map(r=>`<tr><td>${esc(r.label)}</td><td style="font-weight:800">${r.tw!=null?esc(String(r.tw)):'-'}</td><td>${fmt(r.amt)}</td><td>${fmt(r.sum)}</td>
+      <tr><th>항목</th><th>실제 청구액</th><th>분담금 합계</th><th>차액(흡수)</th></tr>
+      ${(M.recon||[]).map(r=>`<tr><td>${esc(r.label)}</td><td>${fmt(r.amt)}</td><td>${fmt(r.sum)}</td>
         <td style="${Math.abs(r.absorbed)>0?'color:var(--warn);font-weight:800':''}">${fmt(r.absorbed)}</td></tr>`).join('')}
     </table></div>
     <div class="muted mt">차액(흡수)은 반올림으로 생긴 금액으로, 일반관리비에서 흡수 처리됩니다.</div></div>`;
@@ -389,7 +345,7 @@ function vCalcResult(ym){
 function showItems(ym,sid){
   const M=db.months[ym];const s=db.shops.find(x=>x.id===sid);const c=(M.charges||{})[sid];
   if(!c)return;
-  const lines=ITEM_KEYS.filter(k=>c.items[k]).map(k=>itemLabel(k,ym)+': '+fmt(c.items[k]));
+  const lines=COSTS.filter(([k])=>c.items[k]).map(([k,l])=>l+': '+fmt(c.items[k]));
   alert(s.unit+'호 '+s.name+' ('+ym+')\n──────────\n'+lines.join('\n')+
     '\n──────────\n금월청구 '+fmt(c.base)+'\n미납이월 '+fmt(c.carry)+'\n조정 '+fmt(c.adj)+'\n최종청구 '+fmt(c.total));
 }
@@ -401,7 +357,7 @@ function doCalc(ym){
 function confirmBill(ym){
   const M=db.months[ym];
   if(!M.confirmed){
-    if(!confirm(ym.slice(0,4)+'년 '+perLabel(ym)+'분 청구를 확정할까요?\n확정 후 수납 관리가 가능해집니다.'))return;
+    if(!confirm(ym.replace('-','년 ')+'월 청구를 확정할까요?\n확정 후 수납 관리가 가능해집니다.'))return;
     calcMonth(ym);M.confirmed=true;
   }else{
     if(!confirm('확정을 해제할까요? (수납 기록은 유지됩니다)'))return;
@@ -483,20 +439,7 @@ function vPay(){
   return seg+`<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">💳 청구·수납</h1><div class="spacer"></div>
     <select style="width:auto" onchange="payYM=this.value;render()">${ymOptions(ym)}</select>
     ${M&&M.confirmed?`<button class="btn sm" onclick="exportPayCSV('${ym}')">📊 엑셀</button>`:''}</div>
-  ${!M||!M.confirmed?`<div class="card"><div class="empty">${ym.slice(0,4)}년 ${perLabel(ym)}분 청구가 아직 확정되지 않았습니다.<br><button class="btn primary mt" onclick="calcYM='${ym}';go('calc')">계산 화면으로 이동</button></div></div>`:`
-  <div class="card"><h2>🧾 상가관리비 청구서 <span class="muted" style="font-weight:400;font-size:15px">업체별 이미지 저장·발송</span></h2>
-    <button class="btn primary" style="width:100%;justify-content:center" onclick="saveAllInvoices('${ym}')">🖼 전체 청구서 이미지 저장 (${shops.length}장)</button>
-    <div class="tablewrap mt"><table style="font-weight:700">
-      <tr><th>업체</th><th>청구액</th><th>보내기</th></tr>
-      ${shops.map(s=>{const ch=M.charges[s.id]||{total:0};
-        return `<tr><td style="white-space:nowrap">${esc(s.unit)}호 ${esc(s.name)}</td><td>${fmt(ch.total)}</td>
-        <td><div class="row" style="gap:4px;flex-wrap:nowrap">
-          <button class="btn sm" onclick="saveInvoiceImage('${ym}','${s.id}')">🖼 저장</button>
-          <button class="btn sm" onclick="shareInvoiceImage('${ym}','${s.id}')">📤 공유</button>
-          <button class="btn sm" onclick="smsInvoice('${ym}','${s.id}')">✉️ 문자</button>
-        </div></td></tr>`;}).join('')}
-    </table></div>
-    <div class="muted mt" style="font-size:14px">📤 공유: 이미지 청구서를 문자(MMS)·카톡으로 전송 · ✉️ 문자: 번호와 내용이 채워진 문자창이 열립니다 (전송 버튼만 누르면 됨)</div></div>
+  ${!M||!M.confirmed?`<div class="card"><div class="empty">${ym.replace('-','년 ')}월 청구가 아직 확정되지 않았습니다.<br><button class="btn primary mt" onclick="calcYM='${ym}';go('calc')">계산 화면으로 이동</button></div></div>`:`
   <div class="card"><h2>업체별 수납 현황</h2>
     <div class="tablewrap"><table style="font-weight:700">
       <tr><th>업체</th><th>청구액</th><th>납부액</th><th>미납액</th><th>상태</th></tr>
@@ -516,9 +459,9 @@ function vPayDetail(ym,sid){
   const ch=M.charges[sid]||{items:{},base:0,carry:0,adj:0,total:0,usage:0};
   M.pays=M.pays||{};const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',payer:'',note:'',adj:0};
   const st=payStatus(M,sid);
-  return `<div class="card" id="payDetail"><h2>💰 ${esc(s.unit)}호 ${esc(s.name)} — ${ym.slice(0,4)}년 ${perLabel(ym)}분 <span class="badge ${stBadge(st)}">${st}</span></h2>
+  return `<div class="card" id="payDetail"><h2>💰 ${esc(s.unit)}호 ${esc(s.name)} — ${ym.replace('-','년 ')}월 <span class="badge ${stBadge(st)}">${st}</span></h2>
     <div class="tablewrap"><table>
-      ${ITEM_KEYS.filter(k=>ch.items[k]).map(k=>`<tr><td>${itemLabel(k,ym)}${k==='water12'?' ('+(ch.usage||0)+'톤)':''}</td><td style="text-align:right;font-weight:700">${fmt(ch.items[k])}</td></tr>`).join('')}
+      ${COSTS.filter(([k])=>ch.items[k]).map(([k,l])=>`<tr><td>${l}${k==='water12'?' ('+(ch.usage||0)+'톤)':''}</td><td style="text-align:right;font-weight:700">${fmt(ch.items[k])}</td></tr>`).join('')}
       <tr><td>미납이월</td><td style="text-align:right;font-weight:700;${ch.carry>0?'color:var(--bad)':''}">${fmt(ch.carry)}</td></tr>
       <tr><td>할인/조정</td><td style="text-align:right"><input type="number" value="${p.adj||0}" style="width:120px;text-align:right;padding:6px;display:inline-block" onchange="db.months['${ym}'].pays['${sid}'].adj=Number(this.value)||0;calcMonth('${ym}');save();render()"></td></tr>
       <tr style="background:#f8fafc"><td><b>최종 청구액</b></td><td style="text-align:right;font-weight:800;color:var(--brand);font-size:17px">${fmt(ch.total)}</td></tr>
@@ -552,83 +495,35 @@ function doPay(ym,sid){
   p.payer=document.getElementById('payer').value.trim();
   save();render();toast('납부 처리되었습니다');
 }
-const invLabel=(k,ym)=>{const[a,b]=perMonths(ym);return{water12:'수도 전용요금',waterCommon:'수도 공용요금',water3:'3층 수도요금',elec1:a+'월 전기요금',elec2:b+'월 전기요금',septic:'정화조청소비',safety:'전기소방관리비',mgmt:'상가관리비',clean:'상가청소비',etc:'기타비용'}[k]||k;};
 function invoiceText(ym,sid){
   const M=db.months[ym];const s=db.shops.find(x=>x.id===sid);
   const ch=(M.charges||{})[sid]||{items:{},base:0,carry:0,adj:0,total:0,usage:0};
-  const y=ym.slice(0,4);
   const L=[];
-  L.push('['+S().buildingName+']');
-  L.push(y+'년 '+perLabel(ym)+'분 관리비 청구서');
+  L.push('['+S().buildingName+'] '+ym.replace('-','년 ')+'월 관리비 청구서');
   L.push('업체: '+s.unit+'호 '+s.name);
+  if(M.info.due)L.push('납부기한: '+fmtDate(M.info.due));
   L.push('──────────');
-  ITEM_KEYS.forEach(k=>{if(!ch.items[k])return;
-    if(k==='water12'){const mt=(M.meters||{})[sid]||{};
-      L.push('· 수도 전용요금 (지침 '+(mt.base||0)+' → '+(mt.curr||0)+' · 사용량 '+(ch.usage||0)+'톤): '+fmt(ch.items[k]));}
-    else L.push('· '+invLabel(k,ym)+': '+fmt(ch.items[k]));});
+  COSTS.forEach(([k,l])=>{if(ch.items[k])L.push('· '+l+(k==='water12'?'('+(ch.usage||0)+'톤)':'')+': '+fmt(ch.items[k]));});
   if(ch.carry)L.push('· 미납이월: '+fmt(ch.carry));
   if(ch.adj)L.push('· 할인/조정: '+fmt(ch.adj));
   L.push('──────────');
-  L.push('합계금액: '+fmt(ch.total)+'원');
-  L.push('');
-  L.push('청구일자: '+fmtDate(M.info.billDate||todayStr()));
-  if(M.info.due)L.push('납부마감일: '+fmtDate(M.info.due));
-  if(S().account)L.push('납부처: '+S().account);
-  L.push(y+'년 '+perLabel(ym)+' 관리비를 청구합니다.');
-  L.push('수고하셨습니다.');
+  L.push('최종 청구액: '+fmt(ch.total));
+  if(S().account)L.push('입금계좌: '+S().account);
+  L.push('감사합니다.');
   return L.join('\n');
 }
 function printInvoice(ym,sid){
   const el=document.getElementById('printArea');
-  el.innerHTML='<div style="padding:30px;font-size:18px;line-height:1.9;white-space:pre-wrap;font-family:inherit">'+esc(invoiceText(ym,sid))+'</div>';
+  el.innerHTML='<div style="padding:30px;font-size:16px;line-height:1.9;white-space:pre-wrap;font-family:inherit">'+esc(invoiceText(ym,sid))+'</div>';
   el.style.display='block';
   window.print();
   setTimeout(()=>{el.style.display='none';},500);
 }
-function invoiceCanvas(ym,sid){
-  const lines=invoiceText(ym,sid).split('\n');
-  const W=760,lh=46,pad=44;
-  const cv=document.createElement('canvas');cv.width=W;cv.height=pad*2+lh*lines.length;
-  const ctx=cv.getContext('2d');
-  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.strokeStyle='#c7d2fe';ctx.lineWidth=6;ctx.strokeRect(3,3,cv.width-6,cv.height-6);
-  ctx.fillStyle='#111827';
-  lines.forEach((ln,i)=>{
-    ctx.font=(i<2?'bold 32px':'26px')+" 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif";
-    ctx.fillText(ln,pad,pad+lh*(i+1)-14);
-  });
-  return cv;
-}
-function invoiceFileName(ym,sid){const s=db.shops.find(x=>x.id===sid);return '청구서_'+s.unit+'호_'+s.name+'_'+ym.slice(0,4)+'년'+perLabel(ym)+'.png';}
-function saveInvoiceImage(ym,sid,quiet){
-  invoiceCanvas(ym,sid).toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=invoiceFileName(ym,sid);a.click();if(!quiet)toast('청구서 이미지 저장됨');});
-}
-function shareInvoiceImage(ym,sid){
-  invoiceCanvas(ym,sid).toBlob(async b=>{
-    const file=new File([b],invoiceFileName(ym,sid),{type:'image/png'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'관리비 청구서'});}catch(e){}
-    }else{saveInvoiceImage(ym,sid);toast('공유 미지원 브라우저 — 이미지로 저장했습니다');}
-  });
-}
-function smsInvoice(ym,sid){
-  const s=db.shops.find(x=>x.id===sid);
-  const num=String(s.phone||'').replace(/[^0-9]/g,'');
-  if(!num)return toast(s.name+': 전화번호가 등록되지 않았습니다');
-  const sep=/iPhone|iPad|Macintosh/.test(navigator.userAgent)?'&':'?';
-  location.href='sms:'+num+sep+'body='+encodeURIComponent(invoiceText(ym,sid));
-}
-function saveAllInvoices(ym){
-  const shops=activeShops();let i=0;
-  const next=()=>{if(i>=shops.length){toast('청구서 '+shops.length+'장 이미지 저장 완료');return;}
-    saveInvoiceImage(ym,shops[i].id,true);i++;setTimeout(next,700);};
-  next();
-}
 function exportPayCSV(ym){
   const M=db.months[ym];const shops=activeShops();
-  const rows=[['호수','업체명','사용량(톤)',...ITEM_KEYS.map(k=>itemLabel(k,ym)),'미납이월','조정','최종청구','납부액','미납액','상태','납부일','입금자']];
+  const rows=[['호수','업체명','사용량(톤)',...COSTS.map(c=>c[1]),'미납이월','조정','최종청구','납부액','미납액','상태','납부일','입금자']];
   shops.forEach(s=>{const ch=M.charges[s.id]||{items:{}};const p=(M.pays||{})[s.id]||{};
-    rows.push([s.unit,s.name,ch.usage||0,...ITEM_KEYS.map(k=>ch.items[k]||0),ch.carry||0,ch.adj||0,ch.total||0,p.paid||0,(ch.total||0)-(p.paid||0),payStatus(M,s.id),p.date||'',p.payer||'']);});
+    rows.push([s.unit,s.name,ch.usage||0,...COSTS.map(([k])=>ch.items[k]||0),ch.carry||0,ch.adj||0,ch.total||0,p.paid||0,(ch.total||0)-(p.paid||0),payStatus(M,s.id),p.date||'',p.payer||'']);});
   const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download='관리비_'+ym+'.csv';a.click();toast('CSV 다운로드');
@@ -648,81 +543,33 @@ function ledgerEntries(){
   db.ledger.forEach(l=>ev.push({...l,d:l.date,cat:l.category,amt:l.amount}));
   return ev.sort((a,b)=>b.d.localeCompare(a.d));
 }
-let ledgerYear=String(new Date().getFullYear());
-function yearsOfLedger(){
-  const ys=new Set(ledgerEntries().map(e=>e.d.slice(0,4)));
-  Object.keys(S().openBal||{}).forEach(y=>ys.add(y));
-  Object.keys(db.months).forEach(k=>ys.add(k.slice(0,4)));
-  ys.add(String(new Date().getFullYear()));
-  return [...ys].sort();
-}
-function hasYearData(y){return ledgerEntries().some(e=>e.d.startsWith(y));}
-function yearInc(y){return ledgerEntries().filter(e=>e.d.startsWith(y)&&e.kind==='in').reduce((a,e)=>a+e.amt,0);}
-function yearOut(y){return ledgerEntries().filter(e=>e.d.startsWith(y)&&e.kind==='out').reduce((a,e)=>a+e.amt,0);}
-function openingBal(y,depth){
-  depth=depth||0;const ob=S().openBal||{};const py=String(Number(y)-1);
-  if(depth>30)return Number(ob[y])||0;
-  if(hasYearData(py)||ob[py]!=null)return openingBal(py,depth+1)+yearInc(py)-yearOut(py);
-  return Number(ob[y])||0;
-}
-function setOpenBal(){
-  S().openBal=S().openBal||{};
-  S().openBal[ledgerYear]=Number(document.getElementById('obAmt').value)||0;
-  save();render();toast('이월금이 저장되었습니다');
-}
 function vLedger(){
-  const y=ledgerYear;
-  const ev=ledgerEntries().filter(e=>e.d.startsWith(y));
-  const open=openingBal(y);
-  const py=String(Number(y)-1);
-  const autoCarry=hasYearData(py)||((S().openBal||{})[py]!=null);
-  const months=[...new Set(ev.map(e=>e.d.slice(0,7)))].sort();
-  let carry=open;
-  const monthly=months.map(ym=>{
+  const ev=ledgerEntries();
+  const yms=[...new Set(ev.map(e=>e.d.slice(0,7)))].sort();
+  let carry=0;const monthly=yms.map(ym=>{
     const list=ev.filter(e=>e.d.startsWith(ym));
     const inc=list.filter(e=>e.kind==='in').reduce((a,e)=>a+e.amt,0);
     const out=list.filter(e=>e.kind==='out').reduce((a,e)=>a+e.amt,0);
-    const row={ym,carry,inc,out,bal:carry+inc-out};carry=row.bal;return row;});
-  const bal=open+yearInc(y)-yearOut(y);
-  const per=[];
-  for(let m=1;m<=11;m+=2){
-    const k=y+'-'+pad(m);const M=db.months[k];
-    if(!M||!M.confirmed)continue;
-    let tot=0,paid=0;
-    activeShops().forEach(s=>{const ch=(M.charges||{})[s.id];if(ch){tot+=ch.total;paid+=(((M.pays||{})[s.id])||{}).paid||0;}});
-    per.push({label:m+'·'+(m+1)+'월',tot,paid});
-  }
+    const row={ym,carry,inc,out,bal:carry+inc-out};carry=row.bal;return row;}).reverse();
   return `<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">🧾 금전출납부</h1><div class="spacer"></div>
-    <select style="width:auto" onchange="ledgerYear=this.value;render()">${yearsOfLedger().reverse().map(yy=>`<option ${yy===y?'selected':''}>${yy}</option>`).join('')}</select>
-    <span class="badge b-brand" style="font-size:15px">${y}년 잔액 ${fmt(bal)}</span></div>
-  <div class="card"><h2>💼 ${y}년 이월금</h2>
-    ${autoCarry?`<div class="row"><span style="font-size:17px;font-weight:800">${fmt(open)}</span><span class="muted" style="font-size:15px">— 전년도(${py}년) 잔액이 자동 이월되었습니다</span></div>`
-    :`<div class="row"><input type="number" id="obAmt" inputmode="numeric" value="${(S().openBal||{})[y]??''}" placeholder="전월 이월금 입력" style="flex:1">
-      <button class="btn primary sm" onclick="setOpenBal()">저장</button></div>
-      <div class="muted mt" style="font-size:15px">처음 시작할 때 전월 이월금을 입력하세요. 다음 해부터는 전년도 잔액이 자동 이월됩니다.</div>`}</div>
-  <div class="card"><h2>📊 ${y}년 기간별 청구 총괄표</h2>
-    ${per.length?`<div class="tablewrap"><table style="font-weight:700">
-      <tr><th>기간</th><th>청구액</th><th>수납액</th><th>미납액</th></tr>
-      ${per.map(r=>`<tr><td><b>${r.label}</b></td><td>${fmt(r.tot)}</td><td style="color:var(--ok)">${fmt(r.paid)}</td><td style="color:${r.tot-r.paid>0?'var(--bad)':'var(--ink)'}">${fmt(r.tot-r.paid)}</td></tr>`).join('')}
-      <tr style="background:#f8fafc"><td><b>합계</b></td><td><b>${fmt(per.reduce((a,r)=>a+r.tot,0))}</b></td><td><b>${fmt(per.reduce((a,r)=>a+r.paid,0))}</b></td><td><b>${fmt(per.reduce((a,r)=>a+(r.tot-r.paid),0))}</b></td></tr>
-    </table></div>`:'<div class="empty">확정된 청구가 없습니다</div>'}</div>
-  <div class="card"><h2>지출 기록 <span class="muted" style="font-weight:400">관리비 수납은 자동으로 수입 처리됩니다</span></h2>
+    <span class="badge b-brand" style="font-size:15px">현재잔액 ${fmt(carry)}</span></div>
+  <div class="card"><h2>지출 기록 <span class="muted" style="font-weight:400">수납은 자동으로 수입 처리됩니다</span></h2>
     <div class="row">
       <input type="date" id="lgDate" value="${todayStr()}" style="width:auto">
-      <select id="lgCat" style="width:auto">${['수리비','청소비','정화조비','소방안전관리비','일반관리비','기타지출'].map(c=>`<option>${c}</option>`).join('')}</select>
+      <select id="lgCat" style="width:auto">${['수리비','청소비','정화조비','소방안전관리비','기타지출'].map(c=>`<option>${c}</option>`).join('')}</select>
       <input type="number" id="lgAmt" placeholder="금액" style="width:110px;flex:none" inputmode="numeric">
       <input id="lgMemo" placeholder="비고" style="flex:1;min-width:90px">
       <button class="btn primary sm" onclick="addExpense()">추가</button></div></div>
-  <div class="card"><h2>${y}년 월별 정산</h2>
+  <div class="card"><h2>월별 정산</h2>
     <div class="tablewrap"><table style="font-weight:700">
       <tr><th>월</th><th>이월</th><th>수입</th><th>지출</th><th>잔액</th></tr>
       ${monthly.map(r=>`<tr><td><b>${r.ym.replace('-','.')}</b></td><td>${fmt(r.carry)}</td>
         <td style="color:var(--ok)">${fmt(r.inc)}</td><td style="color:var(--bad)">${fmt(r.out)}</td><td><b>${fmt(r.bal)}</b></td></tr>`).join('')||'<tr><td colspan="5" class="empty">내역이 없습니다</td></tr>'}
     </table></div></div>
-  <div class="card"><h2>${y}년 상세 내역</h2>
+  <div class="card"><h2>상세 내역</h2>
     ${ev.length?`<div class="tablewrap"><table style="font-weight:700">
       <tr><th>날짜</th><th>구분</th><th>항목</th><th>금액</th><th>비고</th><th></th></tr>
-      ${ev.slice(0,60).map(e=>`<tr><td>${fmtMD(e.d)}</td>
+      ${ev.slice(0,40).map(e=>`<tr><td>${fmtMD(e.d)}</td>
         <td><span class="badge ${e.kind==='in'?'b-ok':'b-bad'}">${e.kind==='in'?'수입':'지출'}</span></td>
         <td style="white-space:nowrap">${esc(e.cat)}</td><td>${fmt(e.amt)}</td>
         <td class="muted" style="white-space:nowrap">${esc(e.memo||'')}</td>
@@ -745,17 +592,11 @@ function delExpense(id){
 function vSettings(){
   const s=S();
   return `<h1 style="font-size:19px;margin-bottom:8px">⚙️ 설정</h1>
-  <div class="card"><h2>📅 관리비 청구 기간</h2>
-    <div class="row">
-      <select id="setPeriod" style="flex:1">${ymOptions(s.curPeriod||curPeriodYM())}</select>
-      <button class="btn primary" onclick="S().curPeriod=document.getElementById('setPeriod').value;calcYM=S().curPeriod;payYM=calcYM;save();render();toast('청구 기간이 설정되었습니다')">적용</button>
-    </div>
-    <div class="muted mt" style="font-size:15px">관리비는 두 달 단위(1·2월 / 3·4월 / 5·6월 / 7·8월 / 9·10월 / 11·12월)로 청구됩니다. 계산 전에 여기서 기간을 선택하면 홈·계산·수납 화면에 그대로 적용됩니다.</div></div>
   <div class="card"><h2>🏢 건물정보</h2>
     <div class="grid2">
       <div><label>건물(상가) 이름</label><input id="setName" value="${esc(s.buildingName)}"></div>
       <div><label>기본 담당자</label><input id="setMgr" value="${esc(s.mgr||'')}"></div>
-      <div style="grid-column:1/-1"><label>납부처 (은행명 · 계좌번호 · 성명)</label><input id="setAcct" value="${esc(s.account)}" placeholder="○○은행 000-000-000000 홍길동"></div>
+      <div style="grid-column:1/-1"><label>입금 계좌정보</label><input id="setAcct" value="${esc(s.account)}" placeholder="○○은행 000-000-000000 (예금주)"></div>
     </div>
     <button class="btn primary mt" onclick="saveSet()">저장</button></div>
   <div class="card"><h2>🔢 반올림 설정</h2>
@@ -770,13 +611,10 @@ function vSettings(){
       <button class="btn" onclick="exportData()">⬇️ 백업</button>
       <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ 복원</button></div>
     <div class="muted mt">마지막 백업: ${s.lastBackup?fmtDate(s.lastBackup):'없음'} · 데이터는 클라우드에도 자동 저장됩니다.</div></div>
-  <div class="card"><h2>🗑 데이터 초기화</h2>
-    <div class="muted" style="font-size:15px">앱을 업그레이드(새 파일 업로드)해도 입력한 데이터는 기기와 클라우드에 그대로 유지됩니다.<br>처음부터 새로 시작하려면 아래 버튼으로 초기화하세요. 초기화 전 [⬇️ 백업]을 권장합니다.</div>
-    <button class="btn danger mt" onclick="resetAll()">🗑 모든 데이터 초기화</button></div>
   <div class="card"><h2>👤 계정</h2>
     <div class="row"><span class="muted">로그인: <b>${esc(window.fbUserEmail||'')}</b></span>
     <button class="btn sm danger" onclick="window.fbLogout&&window.fbLogout()">로그아웃</button></div>
-    <div class="muted mt">앱 버전 b0714h</div></div>`;
+    <div class="muted mt">앱 버전 b0714a</div></div>`;
 }
 function saveSet(){
   S().buildingName=document.getElementById('setName').value.trim()||'우리상가';
@@ -785,11 +623,6 @@ function saveSet(){
   const u=document.getElementById('setU'),d=document.getElementById('setD'),sh=document.getElementById('setS');
   if(u)S().unitRound=Number(u.value);if(d)S().dispRound=Number(d.value);if(sh)S().shareRound=Number(sh.value);
   save();render();toast('설정이 저장되었습니다');
-}
-function resetAll(){
-  if(!confirm('모든 데이터(업체·계산·수납·출납부·설정)를 삭제하고 처음부터 시작할까요?'))return;
-  if(!confirm('정말 초기화할까요?\n클라우드에 저장된 데이터도 함께 초기화되며 되돌릴 수 없습니다.\n(백업을 먼저 받는 것을 권장합니다)'))return;
-  db={shops:[],months:{},ledger:[],settings:{}};migrateDb();save();view='home';render();toast('초기화되었습니다 — 처음부터 시작합니다');
 }
 function exportData(){
   S().lastBackup=todayStr();save();
@@ -853,25 +686,22 @@ function errKo(e){const c=(e&&e.code)||'';
   if(c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))return '이메일 또는 비밀번호가 올바르지 않습니다';
   if(c.includes('too-many-requests'))return '시도가 너무 많습니다. 잠시 후 다시 시도하세요';
   return '오류: '+c;}
-window.fbLogin=async()=>{try{msg('로그인 중...');await signInWithEmailAndPassword(auth,email(),pw());msg('✅ 인증 성공 — 데이터 불러오는 중...');}catch(e){msg(errKo(e));}};
+window.fbLogin=async()=>{try{msg('');await signInWithEmailAndPassword(auth,email(),pw());}catch(e){msg(errKo(e));}};
 window.fbSignup=async()=>{try{msg('');await createUserWithEmailAndPassword(auth,email(),pw());}catch(e){msg(errKo(e));}};
 window.fbReset=async()=>{try{if(!email())return msg('이메일을 먼저 입력하세요');await sendPasswordResetEmail(auth,email());msg('재설정 메일을 보냈습니다.');}catch(e){msg(errKo(e));}};
 window.fbLogout=()=>{if(!confirm('로그아웃할까요?'))return;localStorage.removeItem('bldgadmin_v1');signOut(auth).then(()=>location.reload());};
 let saveTimer=null,uid2=null;
 window.queueCloudSave=(json)=>{if(!uid2)return;clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{setDoc(doc(fsdb,'bldg',uid2),{payload:json,updated:Date.now()}).catch(e=>console.warn(e));},800);};
-const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('연결 시간초과')),ms))]);
 onAuthStateChanged(auth,async user=>{
   const lock=document.getElementById('lockScreen');
   if(!user){uid2=null;window.fbUserEmail='';lock.style.display='flex';return;}
   uid2=user.uid;window.fbUserEmail=user.email||'';
-  msg('✅ 인증 성공 — 데이터 불러오는 중...');
   try{
-    const snap=await withTimeout(getDoc(doc(fsdb,'bldg',uid2)),8000);
+    const snap=await getDoc(doc(fsdb,'bldg',uid2));
     if(snap.exists()&&snap.data().payload)window.applyCloudDb(JSON.parse(snap.data().payload));
-    else withTimeout(setDoc(doc(fsdb,'bldg',uid2),{payload:window.getDbJson(),updated:Date.now()}),8000).catch(e=>console.warn(e));
-  }catch(e){console.warn('클라우드 불러오기 실패',e);if(window.toast)toast('클라우드 연결 지연 — 기기 데이터로 엽니다 ('+(e.code||e.message)+')');}
-  msg('');
+    else await setDoc(doc(fsdb,'bldg',uid2),{payload:window.getDbJson(),updated:Date.now()});
+  }catch(e){console.warn('클라우드 불러오기 실패',e);}
   lock.style.display='none';
 });
 if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
