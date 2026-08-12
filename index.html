@@ -79,7 +79,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f8fafc}
   <button class="btn" style="width:270px;justify-content:center" onclick="fbSignup()">처음이신가요? 회원가입</button>
   <a href="#" style="color:#64748b;font-size:12px" onclick="fbReset();return false">비밀번호를 잊으셨나요?</a>
   <div id="lockMsg" style="color:#f87171;font-size:13px;min-height:18px;text-align:center"></div>
-  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0714s</div>
+  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0714t</div>
 </div>
 
 <div class="mobiletop"><div id="brand">🏢 상가관리비 <small id="brandSub"></small></div>
@@ -100,7 +100,7 @@ setTimeout(function(){if(!window.fbLogin){var el=document.getElementById('lockMs
 <script>
 /* ═══════════ 기본 ═══════════ */
 const DBKEY='bldgadmin_v1';
-const APP_VER='b0714s';
+const APP_VER='b0714t';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -523,105 +523,161 @@ function vPay(){
   const ym=payYM;
   const M=db.months[ym];
   const shops=activeShops();
-  if(viewParam){payEditSid=viewParam;viewParam=null;}
-  let tot=0,paid=0;
-  if(M&&M.confirmed)shops.forEach(s=>{const ch=M.charges[s.id];if(ch){tot+=ch.total;paid+=((M.pays||{})[s.id]||{}).paid||0;}});
+  if(viewParam){viewParam=null;}
+  let tot=0,paid=0,paidCnt=0,unpaidCnt=0;
+  const conf=M&&M.confirmed;
+  if(conf)shops.forEach(s=>{const ch=M.charges[s.id];if(!ch)return;const p=(M.pays||{})[s.id]||{};
+    tot+=ch.total;paid+=p.paid||0;
+    if((p.paid||0)>=ch.total&&ch.total>0)paidCnt++;else unpaidCnt++;});
+  if(payFilter==null)payFilter=unpaidCnt>0?'unpaid':'all';
   const stOf=s=>{const ch=(M&&M.charges?M.charges[s.id]:null)||{total:0};const p=(M&&M.pays?M.pays[s.id]:null)||{};
-    if((p.paid||0)<=0)return['미납','b-bad'];if(p.paid<ch.total)return['부분납부','b-warn'];return['납부','b-ok'];};
-  const list=shops.filter(s=>{if(payFilter==='all')return true;const st=stOf(s)[0];return payFilter==='paid'?st==='납부':st!=='납부';});
-  return `<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">💳 수납</h1><div class="spacer"></div>
-    <select style="width:auto" onchange="payYM=this.value;payEditSid=null;render()">${ymOptions(ym)}</select></div>
-  ${!M||!M.confirmed?`<div class="card"><div class="empty">${ym.slice(0,4)}년 ${perLabel(ym)}분 청구가 아직 확정되지 않았습니다.<br><button class="btn primary mt" onclick="calcYM='${ym}';go('calc')">계산 화면으로 이동</button></div></div>`:`
-  <div class="card" style="padding:10px"><div class="grid3">
-    <div class="item"><div class="k">청구액</div><div class="v" style="color:var(--brand);white-space:nowrap">${fmt(tot)}</div></div>
-    <div class="item"><div class="k">수납액</div><div class="v" style="color:var(--ok);white-space:nowrap">${fmt(paid)}</div></div>
-    <div class="item"><div class="k">미납액</div><div class="v" style="color:var(--bad);white-space:nowrap">${fmt(tot-paid)}</div></div>
-  </div></div>
-  <div class="row" style="margin-bottom:9px">
-    <button class="btn" style="flex:1;justify-content:center" onclick="invOpen=!invOpen;render()">${invOpen?'× 청구서 닫기':'🧾 청구서 발송'}</button>
-    <button class="btn" style="flex:0 0 auto" onclick="exportPayCSV('${ym}')">📊 엑셀</button>
+    if((p.paid||0)>=ch.total&&ch.total>0)return '납부';
+    if((p.paid||0)>0)return '부분납부';
+    return '미납';};
+  let list=shops.filter(s=>{const st=stOf(s);
+    if(payFilter==='paid'&&st!=='납부')return false;
+    if(payFilter==='unpaid'&&st==='납부')return false;
+    if(paySearch&&!(s.name.includes(paySearch)||String(s.unit).includes(paySearch)))return false;
+    return true;});
+  const rowS='display:flex;align-items:center;min-height:48px;padding:0 18px;border-bottom:1px solid #f1f5f9;font-size:16px';
+  const amtS='margin-left:auto;font-size:18px;font-weight:800;white-space:nowrap';
+  return `<div style="padding:2px 4px 10px">
+    <div style="font-size:21px;font-weight:800;color:#1f2937">관리비 수납</div>
+    <select style="width:auto;margin-top:7px;font-weight:700" onchange="payYM=this.value;calcYM=this.value;S().curPeriod=this.value;save();payFilter=null;payDetailSid=null;payEditSid=null;render()">${ymOptions(ym)}</select>
   </div>
-  ${invOpen?invCard(ym,shops,M):''}
-  <div class="card" style="padding:10px"><h2 style="font-size:16px">업체별 수납</h2>
-    ${payFilter!=='all'?`<div class="row" style="margin-bottom:7px"><span class="badge ${payFilter==='paid'?'b-ok':'b-bad'}" style="font-size:14px">${payFilter==='paid'?'납부완료 업체만 표시':'미납 업체만 표시'}</span><button class="btn sm" onclick="payFilter='all';render()">전체 보기</button></div>`:''}
-    <div class="tablewrap"><table style="font-size:14px;font-weight:700">
-      <tr><th>업체명</th><th>청구액</th><th>납부일</th><th>상태</th></tr>
-      ${list.map(s=>{const ch=M.charges[s.id]||{total:0};const p=(M.pays||{})[s.id]||{};const sc=stOf(s);
-        return `<tr class="click" ${payEditSid===s.id?'style="background:var(--brand-soft)"':''} onclick="payEditSid=payEditSid==='${s.id}'?null:'${s.id}';render()">
-        <td style="white-space:nowrap">${esc(s.unit)}호 ${esc(s.name)}</td><td style="white-space:nowrap">${fmt(ch.total)}</td>
-        <td>${p.date?fmtMD(p.date):'-'}</td><td><span class="badge ${sc[1]}">${sc[0]}</span></td></tr>`;}).join('')}
-    </table></div>
-    ${payEditSid?payEditBox(ym,payEditSid):'<div class="muted mt" style="font-size:13px">업체명을 누르면 수납 입력창이 열립니다 · 수납액은 출납부 수입에 자동 반영</div>'}
+  ${!conf?`<div class="card"><div class="empty">${ym.slice(0,4)}년 ${perLabel(ym)}분 청구가 아직 확정되지 않았습니다.<br><button class="btn primary mt" onclick="calcYM='${ym}';go('calc')">계산 화면으로 이동</button></div></div>`:`
+  <div class="card" style="padding:0;border-radius:16px;overflow:hidden;margin-bottom:14px">
+    <div style="${rowS}"><span style="color:#667085">총 청구액</span><span style="${amtS};color:#1e3a8a">${fmt(tot)}원</span></div>
+    <div style="${rowS}"><span style="color:#667085">수납액</span><span style="${amtS};color:var(--ok)">${fmt(paid)}원</span></div>
+    <div style="${rowS}"><span style="color:#667085">미납액</span><span style="${amtS};color:${tot-paid>0?'var(--bad)':'#1f2937'}">${fmt(tot-paid)}원</span></div>
+    <div style="${rowS};border-bottom:none"><span style="color:#667085">납부업체</span><span style="${amtS}">${paidCnt}/${shops.length}곳</span></div>
+  </div>
+  <div class="row" style="margin-bottom:9px">
+    <button class="btn sm ${payFilter==='all'?'primary':''}" onclick="payFilter='all';render()">전체 ${shops.length}</button>
+    <button class="btn sm ${payFilter==='unpaid'?'primary':''}" onclick="payFilter='unpaid';render()">미납 ${unpaidCnt}</button>
+    <button class="btn sm ${payFilter==='paid'?'primary':''}" onclick="payFilter='paid';render()">납부 ${paidCnt}</button>
+    <input placeholder="업체명 검색" value="${esc(paySearch)}" style="flex:1;min-width:80px;padding:8px" onchange="paySearch=this.value;render()">
+  </div>
+  <div class="card" style="padding:4px 14px">
+    ${list.length?list.map(s=>{const ch=M.charges[s.id]||{total:0};const p=(M.pays||{})[s.id]||{};
+      const st=stOf(s);const paidDone=st==='납부';
+      const stTxt=paidDone?'납부완료':st==='부분납부'?'부분납부':(p.notified?'통지완료':'미납');
+      const stCls=paidDone?'b-ok':st==='부분납부'?'b-warn':(p.notified?'b-brand':'b-bad');
+      return `<div style="padding:12px 4px;border-bottom:1px solid #f1f5f9">
+      <div style="display:flex;align-items:center;cursor:pointer" onclick="payDetailSid=payDetailSid==='${s.id}'?null:'${s.id}';render()">
+        <span style="font-size:16px;font-weight:800">${esc(s.unit)}호 ${esc(s.name)}</span>
+        <span style="margin-left:auto;font-size:18px;font-weight:800;white-space:nowrap">${fmt(ch.total)}원</span>
+        <span class="badge ${stCls}" style="margin-left:8px">${stTxt}</span>
+      </div>
+      ${paidDone?`<div style="color:#667085;font-size:14px;margin-top:4px">납부일 ${fmtDate(p.date)}${p.thanked?' · 감사문자 완료':''}</div>`
+        :p.notified?`<div style="color:#667085;font-size:14px;margin-top:4px">통지일 ${fmtDate(p.notified)}</div>`:''}
+      ${payDetailSid===s.id?payItemView(ym,s.id):''}
+      <div class="row" style="margin-top:9px">
+        ${paidDone?`${p.thanked?'':`<button class="btn" style="flex:1;justify-content:center;min-height:48px" onclick="sendThanks('${ym}','${s.id}')">감사문자</button>`}
+          <button class="btn" style="flex:1;justify-content:center;min-height:48px" onclick="payEditSid=payEditSid==='${s.id}'?null:'${s.id}';render()">수정</button>`
+        :`<button class="btn" style="flex:1;justify-content:center;min-height:48px" onclick="notifyShop('${ym}','${s.id}')">${p.notified?'다시 통지':'관리비 통지'}</button>
+          <button class="btn primary" style="flex:1;justify-content:center;min-height:48px" onclick="payConfirm('${ym}','${s.id}')">납부</button>`}
+      </div>
+      ${payEditSid===s.id?payFixBox(ym,s.id):''}
+    </div>`;}).join(''):'<div class="empty">해당하는 업체가 없습니다</div>'}
   </div>`}`;
 }
-function payEditBox(ym,sid){
-  const M=db.months[ym];const s=db.shops.find(x=>x.id===sid);if(!s)return '';
-  const ch=(M.charges||{})[sid]||{total:0};
-  M.pays=M.pays||{};const p=M.pays[sid]||{};
-  return `<div style="background:var(--brand-soft);border-radius:14px;padding:12px;margin-top:10px">
-    <b style="font-size:16px">✏️ ${esc(s.unit)}호 ${esc(s.name)} — 청구 ${fmt(ch.total)}</b>
-    <div class="grid3 mt">
-      <div><label>납부금액</label><input type="number" inputmode="numeric" id="pyAmt" value="${p.paid||''}" placeholder="${ch.total}"></div>
-      <div><label>납부일 (월.일)</label><input id="pyDate" value="${p.date?fmtMD(p.date):''}" placeholder="7.31" inputmode="decimal"></div>
-      <div><label>비고</label><input id="pyNote" value="${esc(p.note||'')}"></div>
-    </div>
-    <div class="row mt">
-      <button class="btn primary" style="flex:1;justify-content:center;font-size:16px" onclick="savePayRow('${ym}','${sid}')">✅ 저장</button>
-      <button class="btn" onclick="document.getElementById('pyAmt').value=${ch.total||0};savePayRow('${ym}','${sid}')">전액</button>
-      <button class="btn" onclick="payEditSid=null;render()">닫기</button>
-    </div></div>`;
+function payItemView(ym,sid){
+  const M=db.months[ym];const ch=(M.charges||{})[sid]||{items:{},total:0};
+  const rows=ITEM_KEYS.filter(k=>ch.items[k]).map(k=>`<div style="display:flex;font-size:14px;padding:3px 0"><span style="color:#667085">${invLabel(k,ym)}</span><span style="margin-left:auto;white-space:nowrap">${fmt(ch.items[k])}원</span></div>`).join('');
+  return `<div style="background:#f6f7fd;border-radius:12px;padding:9px 13px;margin-top:8px">${rows}
+    ${ch.carry?`<div style="display:flex;font-size:14px;padding:3px 0"><span style="color:#667085">미납이월</span><span style="margin-left:auto">${fmt(ch.carry)}원</span></div>`:''}
+    <div style="display:flex;font-size:15px;font-weight:800;padding:5px 0 1px;border-top:1px solid #e5e7f0;margin-top:4px"><span>납부금액</span><span style="margin-left:auto">${fmt(ch.total)}원</span></div></div>`;
 }
-function savePayRow(ym,sid){
-  const M=db.months[ym];M.pays=M.pays||{};
-  const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',payer:'',note:'',adj:0};
-  p.paid=Number(document.getElementById('pyAmt').value)||0;
-  const t=String(document.getElementById('pyDate').value||'').trim();
+function payFixBox(ym,sid){
+  const M=db.months[ym];const p=(M.pays||{})[sid]||{};
+  return `<div style="background:var(--brand-soft);border-radius:12px;padding:11px 13px;margin-top:8px">
+    <div class="row"><label style="margin:0">납부일 (월.일)</label>
+      <input id="pfDate" value="${p.date?fmtMD(p.date):''}" placeholder="7.31" inputmode="decimal" style="width:90px;text-align:center">
+      <button class="btn primary" style="flex:1;justify-content:center" onclick="savePayDate('${ym}','${sid}')">저장</button>
+      <button class="btn" onclick="payEditSid=null;render()">닫기</button></div>
+    <div style="text-align:right;margin-top:8px"><a href="#" style="color:#98a2b3;font-size:13px" onclick="cancelPay('${ym}','${sid}');return false">납부 취소</a></div>
+  </div>`;
+}
+function savePayDate(ym,sid){
+  const p=db.months[ym].pays[sid];if(!p)return;
+  const t=String(document.getElementById('pfDate').value||'').trim();
   const byr=billYM(ym).slice(0,4);
   const mch=t.match(/^(\d{1,2})[.\-\/월\s]+(\d{1,2})/);
-  if(mch)p.date=byr+'-'+pad(Number(mch[1]))+'-'+pad(Number(mch[2]));
-  else if(!t&&p.paid)p.date=todayStr();
-  p.note=document.getElementById('pyNote').value.trim();
-  payEditSid=null;save();render();toast('수납 처리되었습니다');
+  if(!mch)return toast('날짜를 7.31 형식으로 입력하세요');
+  p.date=byr+'-'+pad(Number(mch[1]))+'-'+pad(Number(mch[2]));
+  payEditSid=null;save();render();toast('납부일이 수정되었습니다 (출납부에도 반영)');
 }
-function invCard(ym,shops,M){
-  return `<div class="card"><h2>🧾 상가관리비 청구서 <span class="muted" style="font-weight:400;font-size:15px">업체별 이미지 저장·발송</span></h2>
-    <button class="btn primary" style="width:100%;justify-content:center" onclick="saveAllInvoices('${ym}')">🖼 전체 청구서 이미지 저장 (${shops.length}장)</button>
-    <div class="tablewrap mt"><table style="font-weight:700">
-      <tr><th>업체</th><th>청구액</th><th>보내기</th></tr>
-      ${shops.map(s=>{const ch=M.charges[s.id]||{total:0};
-        return `<tr><td style="white-space:nowrap">${esc(s.unit)}호 ${esc(s.name)}</td><td style="white-space:nowrap">${fmt(ch.total)}</td>
-        <td><div class="row" style="gap:4px;flex-wrap:nowrap">
-          <button class="btn sm" onclick="saveInvoiceImage('${ym}','${s.id}')">🖼</button>
-          <button class="btn sm" onclick="shareInvoiceImage('${ym}','${s.id}')">📤</button>
-          <button class="btn sm" onclick="smsInvoice('${ym}','${s.id}')">✉️</button>
-        </div></td></tr>`;}).join('')}
-    </table></div>
-    <div class="muted mt" style="font-size:13px">🖼 이미지 저장 · 📤 문자·카톡으로 이미지 공유 · ✉️ 문자창 열기</div></div>`;
+function cancelPay(ym,sid){
+  if(!confirm('납부를 취소할까요?\n출납부 수입에서도 함께 제거됩니다.'))return;
+  const p=db.months[ym].pays[sid];if(!p)return;
+  p.paid=0;p.date='';p.thanked=null;
+  payEditSid=null;save();render();toast('납부가 취소되었습니다');
 }
-const invLabel=(k,ym)=>{const[a,b]=perMonths(ym);return{water12:'수도 전용요금',waterCommon:'수도 공용요금',water3:'3층 수도요금',elec1:a+'월 전기요금',elec2:b+'월 전기요금',septic:'정화조청소비',safety:'전기소방관리비',mgmt:'상가관리비',clean:'상가청소비',etc:'기타비용'}[k]||k;};
+function notifyShop(ym,sid){
+  const M=db.months[ym];M.pays=M.pays||{};
+  const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',note:'',adj:0};
+  if(p.notified&&!confirm('이미 '+fmtDate(p.notified)+'에 통지한 업체입니다.\n다시 발송할까요?'))return;
+  invoiceCanvas(ym,sid).toBlob(async b=>{
+    const file=new File([b],invoiceFileName(ym,sid),{type:'image/png'});
+    const txt=invoiceText(ym,sid);
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],text:txt,title:'관리비 청구 안내'});}catch(e){}
+    }else{copyText(txt,'청구 내용이 복사되었습니다 — 문자에 붙여넣으세요');smsInvoice(ym,sid);}
+    p.notified=todayStr();save();render();
+  });
+}
+function payConfirm(ym,sid){
+  const M=db.months[ym];const s=db.shops.find(x=>x.id===sid);
+  const ch=(M.charges||{})[sid]||{total:0};
+  if(!confirm(fmt(ch.total)+'원을 오늘 날짜로 납부 처리하시겠습니까?'))return;
+  M.pays=M.pays||{};
+  const p=M.pays[sid]=M.pays[sid]||{};
+  p.paid=ch.total;p.date=todayStr();p.payer=s.name;
+  save();render();
+  setTimeout(()=>{if(confirm('납부 처리가 완료되었습니다.\n감사문자를 보내시겠습니까?'))sendThanks(ym,sid);},150);
+}
+function thanksText(ym,sid){
+  const s=db.shops.find(x=>x.id===sid);
+  const ch=(db.months[ym].charges||{})[sid]||{total:0};
+  return '안녕하세요. '+S().buildingName+'입니다.\n'+s.unit+'호 '+s.name+'의 '+ym.slice(0,4)+'년 '+perLabel(ym)+'분 관리비\n'+fmt(ch.total)+'원이 정상적으로 납부 처리되었습니다.\n협조해 주셔서 감사합니다.';
+}
+function sendThanks(ym,sid){
+  const s=db.shops.find(x=>x.id===sid);
+  const p=db.months[ym].pays[sid];
+  p.thanked=todayStr();save();render();
+  const num=String(s.phone||'').replace(/[^0-9]/g,'');
+  if(num){const sep=/iPhone|iPad|Macintosh/.test(navigator.userAgent)?'&':'?';location.href='sms:'+num+sep+'body='+encodeURIComponent(thanksText(ym,sid));}
+  else copyText(thanksText(ym,sid),'감사문자 내용이 복사되었습니다');
+}
+const invLabel=(k,ym)=>{const[a,b]=perMonths(ym);return{water12:'전용 수도요금',waterCommon:'공용 수도요금',water3:'3층 수도요금',elec1:a+'월 공용 전기요금',elec2:b+'월 공용 전기요금',septic:'정화조 청소비',safety:'전기·소방 안전관리비',mgmt:'상가 관리비',clean:'상가 청소비',etc:'기타비용'}[k]||k;};
+const fmtKDate=ds=>ds?ds.slice(0,4)+'. '+Number(ds.slice(5,7))+'. '+Number(ds.slice(8,10))+'.':'';
 function invoiceText(ym,sid){
   const M=db.months[ym];const s=db.shops.find(x=>x.id===sid);
-  const ch=(M.charges||{})[sid]||{items:{},base:0,carry:0,adj:0,total:0,usage:0};
+  const ch=(M.charges||{})[sid]||{items:{},total:0,usage:0,carry:0,adj:0};
   const y=ym.slice(0,4);
   const L=[];
-  L.push('['+S().buildingName+']');
-  L.push(y+'년 '+perLabel(ym)+'분 관리비 청구서');
-  L.push('업체: '+s.unit+'호 '+s.name);
-  L.push('──────────');
+  L.push('['+S().buildingName+' 관리비 청구 안내]');
+  L.push('');
+  L.push('■ 청구기간: '+y+'년 '+perLabel(ym)+'분');
+  L.push('■ 업체명: '+s.unit+'호 '+s.name);
+  L.push('────────────');
   ITEM_KEYS.forEach(k=>{if(!ch.items[k])return;
     if(k==='water12'){const mt=(M.meters||{})[sid]||{};
-      L.push('· 수도 전용요금 (지침 '+(mt.base||0)+' → '+(mt.curr||0)+' · 사용량 '+(ch.usage||0)+'톤): '+fmt(ch.items[k]));}
-    else L.push('· '+invLabel(k,ym)+': '+fmt(ch.items[k]));});
-  if(ch.carry)L.push('· 미납이월: '+fmt(ch.carry));
-  if(ch.adj)L.push('· 할인/조정: '+fmt(ch.adj));
-  L.push('──────────');
-  L.push('합계금액: '+fmt(ch.total)+'원');
+      L.push('· 전용 수도요금');
+      L.push('지침 '+fmt(mt.base||0)+'→'+fmt(mt.curr||0)+' / 사용량 '+(ch.usage||0)+'톤');
+      L.push(fmt(ch.items[k])+'원');
+    }else L.push('· '+invLabel(k,ym)+': '+fmt(ch.items[k])+'원');});
+  if(ch.carry)L.push('· 미납이월: '+fmt(ch.carry)+'원');
+  if(ch.adj)L.push('· 할인/조정: '+fmt(ch.adj)+'원');
+  L.push('────────────');
+  L.push('■ 납부금액: '+fmt(ch.total)+'원');
+  L.push('■ 청구일: '+fmtKDate(M.info.billDate||todayStr()));
+  if(M.info.due)L.push('■ 납부기한: '+fmtKDate(M.info.due));
+  if(S().account){L.push('■ 납부계좌');L.push(S().account);}
   L.push('');
-  L.push('청구일자: '+fmtDate(M.info.billDate||todayStr()));
-  if(M.info.due)L.push('납부마감일: '+fmtDate(M.info.due));
-  if(S().account)L.push('납부처: '+S().account);
-  L.push(y+'년 '+perLabel(ym)+' 관리비를 청구합니다.');
-  L.push('수고하셨습니다.');
+  L.push(y+'년 '+perLabel(ym)+'분 관리비를 안내드리오니 납부기한까지 입금해 주시기 바랍니다.');
+  L.push('항상 협조해 주셔서 감사합니다.');
   return L.join('\n');
 }
 function printInvoice(ym,sid){
@@ -695,7 +751,8 @@ function ledgerEntries(){
   return ev.sort((a,b)=>b.d.localeCompare(a.d));
 }
 let ledgerYear=String(new Date().getFullYear()),ledgerOpenYM=null,ledgerEditSid=null;
-let expFormOpen=false,expEdit=null,rcptId=null,expKind='out',payEditSid=null,invOpen=false,ledgerMonthSel=null,payFilter='all';
+let expFormOpen=false,expEdit=null,rcptId=null,expKind='out',payEditSid=null,ledgerMonthSel=null,payFilter=null;
+let paySearch='',payDetailSid=null,ledgerKindFil='all',mmOpen=false,ledgerDetail=null;
 function saveLedgerRow(ym,sid){
   const M=db.months[ym];M.pays=M.pays||{};
   const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',payer:'',note:'',adj:0};
@@ -738,92 +795,140 @@ function setOpenBal(){
 }
 function vLedger(){
   const y=ledgerYear;
-  const ents=ledgerEntries().filter(e=>e.d.startsWith(y)).sort((a,b)=>a.d.localeCompare(b.d));
+  const entsAll=ledgerEntries().filter(e=>e.d.startsWith(y)).sort((a,b)=>a.d.localeCompare(b.d));
   const open=openingBal(y);
   const py=String(Number(y)-1);
   const autoCarry=hasYearData(py)||((S().openBal||{})[py]!=null);
-  const inc=ents.filter(e=>e.kind==='in').reduce((a,e)=>a+e.amt,0);
-  const out=ents.filter(e=>e.kind==='out').reduce((a,e)=>a+e.amt,0);
+  const inc=entsAll.filter(e=>e.kind==='in').reduce((a,e)=>a+e.amt,0);
+  const out=entsAll.filter(e=>e.kind==='out').reduce((a,e)=>a+e.amt,0);
   const bal=open+inc-out;
-  const months=[...new Set(ents.map(e=>e.d.slice(0,7)))].sort();
+  let run=open;
+  const rowsAll=entsAll.map(e=>{run+=e.kind==='in'?e.amt:-e.amt;return Object.assign({},e,{run});});
+  const months=[...new Set(entsAll.map(e=>e.d.slice(0,7)))].sort();
   let mrun=open;
-  const monthly=months.map(m=>{const l=ents.filter(e=>e.d.startsWith(m));
+  const monthly=months.map(m=>{const l=entsAll.filter(e=>e.d.startsWith(m));
     const mi=l.filter(e=>e.kind==='in').reduce((a,e)=>a+e.amt,0);
     const mo=l.filter(e=>e.kind==='out').reduce((a,e)=>a+e.amt,0);
     const r={m,mi,mo,bal:mrun+mi-mo};mrun=r.bal;return r;});
-  let run=open;
-  const rowsAll=ents.map(e=>{run+=e.kind==='in'?e.amt:-e.amt;return Object.assign({},e,{run});});
-  const rows=ledgerMonthSel?rowsAll.filter(e=>e.d.startsWith(ledgerMonthSel)):rowsAll;
-  return `<div class="row" style="margin-bottom:8px"><h1 style="font-size:19px">🧾 출납부</h1><div class="spacer"></div>
-    <select style="width:auto" onchange="ledgerYear=this.value;ledgerMonthSel=null;render()">${yearsOfLedger().reverse().map(yy=>`<option value="${yy}" ${yy===y?'selected':''}>${yy}년</option>`).join('')}</select></div>
-  <div class="card" style="padding:10px"><div class="grid2">
-    <div class="item"><div class="k">${autoCarry?'전년 이월금':'전월 이월금'}</div><div class="v" style="color:#1e3a8a;white-space:nowrap">${fmt(open)}</div>
-      ${autoCarry?'':`<div class="row" style="margin-top:6px;gap:4px;flex-wrap:nowrap"><input type="number" inputmode="numeric" id="obAmt" value="${(S().openBal||{})[y]??''}" placeholder="이월금" style="padding:7px;font-size:14px"><button class="btn sm" onclick="setOpenBal()">저장</button></div>`}
-    </div>
-    <div class="item"><div class="k">올해 수입 <span style="font-weight:400">(이월금 제외)</span></div><div class="v" style="color:var(--ok);white-space:nowrap">${fmt(inc)}</div></div>
-    <div class="item"><div class="k">올해 지출</div><div class="v" style="color:var(--bad);white-space:nowrap">${fmt(out)}</div></div>
-    <div class="item"><div class="k">현재 잔액</div><div class="v" style="color:#1e3a8a;white-space:nowrap">${fmt(bal)}</div></div>
-  </div></div>
+  let rows=rowsAll;
+  if(ledgerMonthSel)rows=rows.filter(e=>e.d.startsWith(ledgerMonthSel));
+  if(ledgerKindFil!=='all')rows=rows.filter(e=>e.kind===ledgerKindFil);
+  const lineS='display:flex;font-size:16px;padding:7px 0';
+  return `<div style="padding:2px 4px 10px;display:flex;align-items:center">
+    <div style="font-size:21px;font-weight:800;color:#1f2937">금전출납부</div>
+    <select style="width:auto;margin-left:auto;font-weight:700" onchange="ledgerYear=this.value;ledgerMonthSel=null;ledgerDetail=null;render()">${yearsOfLedger().reverse().map(yy=>`<option value="${yy}" ${yy===y?'selected':''}>${yy}년</option>`).join('')}</select>
+  </div>
+  <div class="card" style="padding:13px 18px;border-radius:16px;margin-bottom:14px">
+    <div style="${lineS}"><span style="color:#667085">${autoCarry?'전년 이월금':'전월 이월금'}</span><span style="margin-left:auto;font-weight:700;white-space:nowrap">${fmt(open)}원</span></div>
+    ${autoCarry?'':`<div class="row" style="margin-bottom:6px;gap:4px;flex-wrap:nowrap"><input type="number" inputmode="numeric" id="obAmt" value="${(S().openBal||{})[y]??''}" placeholder="이월금 입력" style="padding:8px;font-size:15px"><button class="btn sm" onclick="setOpenBal()">저장</button></div>`}
+    <div style="${lineS}"><span style="color:#667085">올해 수입</span><span style="margin-left:auto;font-weight:700;color:var(--ok);white-space:nowrap">${fmt(inc)}원</span></div>
+    <div style="${lineS};border-bottom:1.5px solid #e5e7f0"><span style="color:#667085">올해 지출</span><span style="margin-left:auto;font-weight:700;color:var(--bad);white-space:nowrap">${fmt(out)}원</span></div>
+    <div style="display:flex;align-items:center;padding:11px 0 2px"><span style="font-size:16px;font-weight:800">현재 잔액</span><span style="margin-left:auto;font-size:22px;font-weight:800;color:#1e3a8a;white-space:nowrap">${fmt(bal)}원</span></div>
+  </div>
   <div class="row" style="margin-bottom:9px">
-    <button class="btn ${expFormOpen&&expKind==='in'&&!expEdit?'primary':''}" style="flex:1;justify-content:center" onclick="openExpForm('in')">💰 수입 등록</button>
-    <button class="btn ${expFormOpen&&expKind==='out'&&!expEdit?'primary':''}" style="flex:1;justify-content:center" onclick="openExpForm('out')">💸 지출 등록</button>
+    <button class="btn ${expFormOpen&&expKind==='in'&&!expEdit?'primary':''}" style="flex:1;justify-content:center;min-height:48px;font-size:16px" onclick="openExpForm('in')">＋ 수입 등록</button>
+    <button class="btn ${expFormOpen&&expKind==='out'&&!expEdit?'primary':''}" style="flex:1;justify-content:center;min-height:48px;font-size:16px" onclick="openExpForm('out')">－ 지출 등록</button>
   </div>
   ${expFormOpen?expForm():''}
+  ${ledgerDetail?ledgerDetailView():''}
   ${rcptId?(()=>{const l=db.ledger.find(x=>x.id===rcptId);return l?vReceipt(l):'';})():''}
-  <div class="card" style="padding:10px"><h2 style="font-size:16px">📅 월별 현황 ${ledgerMonthSel?`<button class="btn sm" onclick="ledgerMonthSel=null;render()">전체 보기</button>`:''}</h2>
-    ${monthly.length?`<div class="tablewrap"><table style="font-size:14px;font-weight:700">
-      <tr><th>월</th><th>수입</th><th>지출</th><th>잔액</th></tr>
-      ${monthly.map(r=>`<tr class="click" ${ledgerMonthSel===r.m?'style="background:var(--brand-soft)"':''} onclick="ledgerMonthSel=ledgerMonthSel==='${r.m}'?null:'${r.m}';render()">
-        <td><b>${Number(r.m.slice(5,7))}월</b></td><td style="color:var(--ok);white-space:nowrap">${fmt(r.mi)}</td>
-        <td style="color:var(--bad);white-space:nowrap">${fmt(r.mo)}</td><td style="color:#1e3a8a;white-space:nowrap"><b>${fmt(r.bal)}</b></td></tr>`).join('')}
-    </table></div><div class="muted mt" style="font-size:13px">월을 누르면 아래에 그 달 거래만 표시됩니다</div>`:'<div class="empty">거래가 없습니다</div>'}</div>
-  <div class="card" style="padding:10px"><h2 style="font-size:16px">📒 거래 내역${ledgerMonthSel?' — '+Number(ledgerMonthSel.slice(5,7))+'월':''}</h2>
-    <div class="tablewrap"><table style="font-size:14px;font-weight:700">
-      <tr><th>날짜</th><th>적요</th><th>수입</th><th>지출</th><th>잔액</th></tr>
-      ${!ledgerMonthSel&&open?`<tr><td>01.01</td><td>${autoCarry?'전년 이월금':'전월 이월금'}</td><td style="color:var(--ok);white-space:nowrap">${fmt(open)}</td><td>0</td><td style="color:#1e3a8a;white-space:nowrap"><b>${fmt(open)}</b></td></tr>`:''}
-      ${rows.map(e=>`<tr class="click" onclick="ledgerRowClick('${e.id||''}','${e.sid||''}','${e.pym||''}')">
-        <td>${fmtMD(e.d)}</td><td style="white-space:nowrap">${esc(e.cat)}${e.id&&(db.ledger.find(x=>x.id===e.id)||{}).receipt?' 📄':''}</td>
-        <td style="color:var(--ok);white-space:nowrap">${e.kind==='in'?fmt(e.amt):'0'}</td>
-        <td style="color:var(--bad);white-space:nowrap">${e.kind==='out'?fmt(e.amt):'0'}</td>
-        <td style="color:#1e3a8a;white-space:nowrap"><b>${fmt(e.run)}</b></td></tr>`).join('')||'<tr><td colspan="5" class="empty">거래가 없습니다</td></tr>'}
-    </table></div>
-    <div class="muted mt" style="font-size:13px">거래를 누르면 수정·삭제·영수증 처리 (관리비 수납 줄은 수납 탭으로 이동)</div></div>`;
+  <div class="row" style="margin-bottom:9px">
+    <button class="btn sm ${ledgerKindFil==='all'?'primary':''}" onclick="ledgerKindFil='all';render()">전체</button>
+    <button class="btn sm ${ledgerKindFil==='in'?'primary':''}" onclick="ledgerKindFil='in';render()">수입</button>
+    <button class="btn sm ${ledgerKindFil==='out'?'primary':''}" onclick="ledgerKindFil='out';render()">지출</button>
+    <div class="spacer"></div>
+    <select style="width:auto" onchange="ledgerMonthSel=this.value||null;render()">
+      <option value="">전체 월</option>
+      ${months.map(m=>`<option value="${m}" ${ledgerMonthSel===m?'selected':''}>${Number(m.slice(5,7))}월</option>`).join('')}
+    </select>
+    <button class="btn sm" onclick="mmOpen=!mmOpen;render()">${mmOpen?'월별 닫기':'월별 현황 보기'}</button>
+  </div>
+  ${mmOpen?`<div class="card" style="padding:10px"><div class="tablewrap"><table style="font-size:15px;font-weight:700">
+    <tr><th>월</th><th>수입</th><th>지출</th><th>월말잔액</th></tr>
+    ${monthly.map(r=>`<tr class="click" onclick="ledgerMonthSel='${r.m}';mmOpen=false;render()">
+      <td><b>${Number(r.m.slice(5,7))}월</b></td><td style="color:var(--ok);white-space:nowrap">${fmt(r.mi)}원</td>
+      <td style="color:var(--bad);white-space:nowrap">${fmt(r.mo)}원</td><td style="color:#1e3a8a;white-space:nowrap"><b>${fmt(r.bal)}원</b></td></tr>`).join('')||'<tr><td colspan="4" class="empty">거래가 없습니다</td></tr>'}
+  </table></div><div class="muted mt" style="font-size:13px">월을 누르면 그 달 거래 목록이 표시됩니다</div></div>`:''}
+  <div class="card" style="padding:4px 14px">
+    ${!ledgerMonthSel&&ledgerKindFil==='all'&&open?`<div style="min-height:64px;display:flex;align-items:center;padding:8px 4px;border-bottom:1px solid #f1f5f9">
+      <div style="flex:1"><div style="font-size:15px;font-weight:800">01.01&nbsp; ${autoCarry?'전년 이월금':'전월 이월금'}</div>
+      <div style="font-size:14px;color:#1e3a8a;font-weight:700">잔액 ${fmt(open)}원</div></div></div>`:''}
+    ${rows.length?rows.map(e=>`<div style="display:flex;align-items:center;min-height:64px;padding:8px 4px;border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="openLedgerDetail('${e.id||''}','${e.sid||''}','${e.pym||''}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:800">${fmtMD(e.d)}&nbsp; ${esc(e.cat)}${e.auto?' 수납':''}${e.memo?' <span style="color:#98a2b3;font-weight:400">'+esc(e.memo)+'</span>':''}${e.id&&(db.ledger.find(x=>x.id===e.id)||{}).receipt?' 📄':''}</div>
+        <div style="font-size:15px;font-weight:800;color:${e.kind==='in'?'var(--ok)':'var(--bad)'}">${e.kind==='in'?'수입 +':'지출 -'}${fmt(e.amt)}원</div>
+        <div style="font-size:14px;color:#1e3a8a;font-weight:700">잔액 ${fmt(e.run)}원</div>
+      </div><span style="color:#c0c4d0;font-weight:800">〉</span></div>`).join(''):'<div class="empty">거래가 없습니다</div>'}
+  </div>
+  <div class="muted" style="font-size:13px;padding:0 6px 6px">※ ${autoCarry?'전년':'전월'} 이월금 ${fmt(open)}원은 현재 잔액에는 포함되지만 ${y}년 실제 수입 통계에서는 제외됩니다.</div>`;
 }
 function openExpForm(kind){
   if(expFormOpen&&expKind===kind&&!expEdit)expFormOpen=false;
   else{expFormOpen=true;expKind=kind;expEdit=null;}
-  rcptId=null;render();window.scrollTo(0,0);
+  rcptId=null;ledgerDetail=null;render();window.scrollTo(0,0);
 }
-function ledgerRowClick(id,sid,pym){
-  if(id){const l=db.ledger.find(x=>x.id===id);if(!l)return;expEdit=id;expKind=l.kind;expFormOpen=true;rcptId=null;render();window.scrollTo(0,0);}
-  else if(sid){payYM=pym;payEditSid=sid;go('pay');}
+function openLedgerDetail(id,sid,pym){
+  ledgerDetail={id:id||null,sid:sid||null,pym:pym||null};
+  expFormOpen=false;expEdit=null;rcptId=null;render();window.scrollTo(0,0);
 }
-const EXP_CATS=['전기요금','수도요금','캡스경비','수리비','청소비','전기소방관련','일반관리비','기타지출'];
+function ledgerDetailView(){
+  const d=ledgerDetail;if(!d)return '';
+  if(d.id){
+    const l=db.ledger.find(x=>x.id===d.id);if(!l)return '';
+    return `<div class="card" style="border:2px solid var(--brand)">
+      <b style="font-size:17px">거래 상세</b>
+      <div style="display:flex;font-size:16px;padding:7px 0;margin-top:4px"><span style="color:#667085">날짜</span><span style="margin-left:auto;font-weight:700">${fmtDate(l.date)}</span></div>
+      <div style="display:flex;font-size:16px;padding:7px 0"><span style="color:#667085">항목</span><span style="margin-left:auto;font-weight:700">${esc(l.category)}</span></div>
+      ${l.memo?`<div style="display:flex;font-size:16px;padding:7px 0"><span style="color:#667085">적요</span><span style="margin-left:auto">${esc(l.memo)}</span></div>`:''}
+      <div style="display:flex;font-size:16px;padding:7px 0"><span style="color:#667085">금액</span><span style="margin-left:auto;font-size:18px;font-weight:800;color:${l.kind==='in'?'var(--ok)':'var(--bad)'}">${l.kind==='in'?'+':'-'}${fmt(l.amount)}원</span></div>
+      <div class="row mt">
+        <button class="btn" style="flex:1;justify-content:center;min-height:48px" onclick="expEdit='${l.id}';expKind='${l.kind}';expFormOpen=true;ledgerDetail=null;render();window.scrollTo(0,0)">수정</button>
+        <button class="btn" style="flex:1;justify-content:center;min-height:48px" onclick="rcptId=rcptId==='${l.id}'?null:'${l.id}';render()">영수증${l.receipt?'✔':''}</button>
+        <button class="btn danger" style="min-height:48px" onclick="delExpense('${l.id}')">삭제</button>
+        <button class="btn" style="min-height:48px" onclick="ledgerDetail=null;render()">닫기</button>
+      </div></div>`;
+  }
+  if(d.sid){
+    const s=db.shops.find(x=>x.id===d.sid);
+    const M=db.months[d.pym]||{};const p=(M.pays||{})[d.sid]||{};
+    return `<div class="card" style="border:2px solid var(--brand)">
+      <b style="font-size:17px">관리비 수납 (자동)</b>
+      <div style="display:flex;font-size:16px;padding:7px 0;margin-top:4px"><span style="color:#667085">업체</span><span style="margin-left:auto;font-weight:700">${s?esc(s.unit)+'호 '+esc(s.name):''}</span></div>
+      <div style="display:flex;font-size:16px;padding:7px 0"><span style="color:#667085">납부일</span><span style="margin-left:auto;font-weight:700">${fmtDate(p.date)}</span></div>
+      <div style="display:flex;font-size:16px;padding:7px 0"><span style="color:#667085">금액</span><span style="margin-left:auto;font-size:18px;font-weight:800;color:var(--ok)">+${fmt(p.paid||0)}원</span></div>
+      <div class="muted mt" style="font-size:14px">관리비 수납으로 자동 생성된 수입입니다. 수정·취소는 수납 화면에서 처리하세요.</div>
+      <div class="row mt">
+        <button class="btn primary" style="flex:1;justify-content:center;min-height:48px" onclick="payYM='${d.pym}';payFilter='all';ledgerDetail=null;go('pay')">수납 화면으로</button>
+        <button class="btn" style="min-height:48px" onclick="ledgerDetail=null;render()">닫기</button>
+      </div></div>`;
+  }
+  return '';
+}
+const EXP_CATS=['전기요금','수도요금','청소비','경비비','소방·안전','수리비','일반관리비','기타'];
 function expForm(){
   const l=expEdit?db.ledger.find(x=>x.id===expEdit):null;
   const kind=l?l.kind:expKind;
+  const cats=kind==='in'?['기타수입','이자수입','잡수입']:EXP_CATS;
   return `<div class="card" style="background:var(--brand-soft)">
-    <b style="font-size:16px">${l?'✏️ 거래 수정':(kind==='in'?'💰 수입 등록':'💸 지출 등록')}</b>
+    <b style="font-size:17px">${l?'거래 수정':(kind==='in'?'수입 등록':'지출 등록')}</b>
     <div class="grid2 mt">
       <div><label>날짜</label><input type="date" id="exDate" value="${l?l.date:todayStr()}"></div>
-      <div><label>적요</label><input id="exCat" list="catList" value="${l?esc(l.category):''}" placeholder="${kind==='in'?'예: 기타수입':'예: 전기요금'}">
-        <datalist id="catList">${(kind==='in'?['기타수입','이자수입','잡수입']:EXP_CATS).map(c=>`<option value="${c}">`).join('')}</datalist></div>
-      <div><label>금액</label><input type="number" inputmode="numeric" id="exAmt" value="${l?l.amount:''}" placeholder="0"></div>
-      <div><label>비고</label><input id="exMemo" value="${l?esc(l.memo||''):''}" placeholder="선택"></div>
+      <div><label>항목</label><select id="exCat">${cats.map(c=>`<option ${l&&l.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div><label>금액</label><input id="exAmt" inputmode="numeric" value="${l?fmt(l.amount):''}" placeholder="0" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')"></div>
+      <div><label>적요</label><input id="exMemo" value="${l?esc(l.memo||''):''}" placeholder="간단히 입력 (선택)"></div>
     </div>
     <div class="row mt">
-      <button class="btn primary" style="flex:1;justify-content:center;font-size:16px" onclick="saveExpense()">✅ 저장</button>
-      ${l?`<button class="btn" onclick="rcptId=rcptId==='${l.id}'?null:'${l.id}';render()">📄${l.receipt?'✔':''}</button>
-      <button class="btn danger" onclick="delExpense('${l.id}')">삭제</button>`:''}
-      <button class="btn" onclick="expFormOpen=false;expEdit=null;rcptId=null;render()">취소</button>
-    </div></div>`;
+      <button class="btn primary" style="flex:1;justify-content:center;min-height:48px;font-size:16px" onclick="saveExpense()">저장</button>
+      ${l?`<button class="btn" style="min-height:48px" onclick="rcptId=rcptId==='${l.id}'?null:'${l.id}';render()">영수증${l.receipt?'✔':''}</button>`:''}
+      <button class="btn" style="min-height:48px" onclick="expFormOpen=false;expEdit=null;rcptId=null;render()">취소</button>
+    </div>
+    ${l?'':'<div class="muted mt" style="font-size:13px">영수증은 저장 후 거래를 눌러 첨부할 수 있습니다</div>'}</div>`;
 }
 function saveExpense(){
   const date=document.getElementById('exDate').value;
-  const amount=Number(document.getElementById('exAmt').value)||0;
-  const category=document.getElementById('exCat').value.trim();
+  const amount=Number(String(document.getElementById('exAmt').value).replace(/[^0-9]/g,''))||0;
+  const category=document.getElementById('exCat').value;
   if(!date||amount<=0)return toast('날짜와 금액을 입력하세요');
-  if(!category)return toast('적요를 입력하세요');
   const l=expEdit?db.ledger.find(x=>x.id===expEdit):null;
   const kind=l?l.kind:expKind;
   const data={date,category,amount,memo:document.getElementById('exMemo').value.trim(),kind};
@@ -892,9 +997,9 @@ function downloadReceipt(id){
   if(r.sign){const img=new Image();img.onload=()=>{ctx.drawImage(img,340,330,290,90);fin();};img.src=r.sign;}else fin();
 }
 function delExpense(id){
-  if(!confirm('이 지출 기록을 삭제할까요?'))return;
+  if(!confirm('이 거래를 삭제할까요?\n삭제하면 이후 잔액이 자동 재계산됩니다.'))return;
   db.ledger=db.ledger.filter(l=>l.id!==id);
-  expEdit=null;expFormOpen=false;if(rcptId===id)rcptId=null;
+  expEdit=null;expFormOpen=false;ledgerDetail=null;if(rcptId===id)rcptId=null;
   save();render();
 }
 
@@ -939,7 +1044,7 @@ function vSettings(){
   <div class="card"><h2>👤 계정</h2>
     <div class="row"><span class="muted">로그인: <b>${esc(window.fbUserEmail||'')}</b></span>
     <button class="btn sm danger" onclick="window.fbLogout&&window.fbLogout()">로그아웃</button></div>
-    <div class="muted mt">앱 버전 b0714s</div></div>`;
+    <div class="muted mt">앱 버전 b0714t</div></div>`;
 }
 function saveSet(){
   S().buildingName=document.getElementById('setName').value.trim()||'우리상가';
