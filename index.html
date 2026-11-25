@@ -79,7 +79,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#f8fafc}
   <button class="btn" style="width:270px;justify-content:center" onclick="fbSignup()">처음이신가요? 회원가입</button>
   <a href="#" style="color:#64748b;font-size:12px" onclick="fbReset();return false">비밀번호를 잊으셨나요?</a>
   <div id="lockMsg" style="color:#f87171;font-size:13px;min-height:18px;text-align:center"></div>
-  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0715n</div>
+  <div style="color:#4c4a7a;font-size:11.5px;text-align:center">☁️ 데이터는 본인 계정의 클라우드에 저장됩니다<br>버전 b0716a</div>
 </div>
 
 <div class="mobiletop"><div id="brand">🏢 상가관리비 <small id="brandSub"></small></div>
@@ -100,7 +100,7 @@ setTimeout(function(){if(!window.fbLogin){var el=document.getElementById('lockMs
 <script>
 /* ═══════════ 기본 ═══════════ */
 const DBKEY='bldgadmin_v1';
-const APP_VER='b0715n';
+const APP_VER='b0716a';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -328,6 +328,13 @@ function calcMonth(ym){
       if(mx){charges[mx.id].items[k]=(charges[mx.id].items[k]||0)+diff;sum=amt;}}
     recon.push({label:label+(isElec?' (절상)':''),amt,sum,absorbed:amt-sum,tw});
   });
+  // ── 항목별 수동 수정(업체별 세부내역 덮어쓰기) — 재계산해도 유지 ──
+  M.itemOv=M.itemOv||{};
+  shops.forEach(s=>{
+    const c=charges[s.id];c.auto=Object.assign({},c.items);c.ov={};
+    const ov=M.itemOv[s.id]||{};
+    Object.keys(ov).forEach(k=>{if(ITEM_KEYS.indexOf(k)<0)return;const v=Number(ov[k])||0;c.ov[k]=1;if(v)c.items[k]=v;else delete c.items[k];});
+  });
   // ── 합계 ──
   shops.forEach(s=>{
     const c=charges[s.id];
@@ -547,6 +554,7 @@ function vCalcResult(ym){
   const M=db.months[ym];const shops=activeShops();
   const tot=shops.reduce((a,s)=>a+((M.charges[s.id]||{}).base||0)+((M.charges[s.id]||{}).adj||0),0);
   const absTot=(M.recon||[]).reduce((a,r)=>a+Math.abs(r.absorbed||0),0);
+  let ovCnt=0,ovDiff=0;shops.forEach(s=>{const c=M.charges[s.id];if(!c||!c.ov)return;Object.keys(c.ov).forEach(k=>{ovCnt++;ovDiff+=((c.items||{})[k]||0)-((c.auto||{})[k]||0);});});
   return `<div class="card" style="padding:13px 18px;border-radius:16px;margin-bottom:14px" id="calcResult">
     <div style="font-size:16px;font-weight:800">업체별 청구액</div>
     <div style="color:#667085;font-size:15px;margin:4px 0 6px">업체 ${shops.length}곳 · 총 청구액 <b style="color:#1e3a8a">${fmt(tot)}원</b></div>
@@ -556,12 +564,13 @@ function vCalcResult(ym){
       <div style="display:flex;align-items:center;gap:6px;min-height:58px;cursor:pointer" onclick="calcDetailSid=calcDetailSid==='${s.id}'?null:'${s.id}';adjEdit=false;render()">
         <div style="flex:0 0 86px;min-width:0"><div style="font-size:16px;font-weight:800">${esc(s.unit)}호</div><div style="font-size:14px;color:#667085;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div></div>
         <span style="flex:0 0 46px;text-align:right;font-size:15px">${c.usage||0}톤</span>
-        <span style="flex:1;text-align:right;font-size:16px;font-weight:800;white-space:nowrap">${fmt((c.base||0)+(c.adj||0))}원</span>
+        <span style="flex:1;text-align:right;font-size:16px;font-weight:800;white-space:nowrap">${c.ov&&Object.keys(c.ov).length?'<span style="font-size:12px;font-weight:700;color:#8A5A00;background:#FFF4D6;border-radius:6px;padding:1px 5px;margin-right:4px">수정</span>':''}${fmt((c.base||0)+(c.adj||0))}원</span>
         <span style="flex:0 0 58px;text-align:right;font-size:14px;color:${c.adj?'var(--warn)':'#98a2b3'};white-space:nowrap">${fmt(c.adj||0)}원</span>
       </div>
       ${calcDetailSid===s.id?calcDetailView(ym,s.id):''}
       </div>`;}).join('')}
-    <div class="muted mt" style="font-size:13px">업체를 누르면 세부 산출내역·조정 입력이 열립니다 · 미납금은 수납 화면에서 관리</div>
+    ${ovDiff?`<div style="margin-top:8px;background:#FFF4D6;color:#8A5A00;border-radius:10px;padding:8px 11px;font-size:14px;font-weight:600">✏️ 항목 수동 수정 ${ovCnt}건 · 자동 계산 대비 ${ovDiff>0?'+':''}${fmt(ovDiff)}원</div>`:''}
+    <div class="muted mt" style="font-size:13px">업체를 누르면 세부내역이 열리고 항목별 금액을 수정할 수 있습니다 · 미납금은 수납 화면에서 관리</div>
   </div>
   <div class="card" style="padding:13px 18px;margin-bottom:14px">
     <div style="display:flex;align-items:center;font-size:15px;font-weight:800;color:${absTot?'var(--warn)':'var(--ok)'}">
@@ -577,23 +586,62 @@ function vCalcResult(ym){
   :`<button class="btn primary" style="width:100%;justify-content:center;min-height:52px;font-size:17px" onclick="confirmBill('${ym}')">청구금액 확정</button>`}`;
 }
 function calcDetailView(ym,sid){
-  const M=db.months[ym];const c=(M.charges||{})[sid]||{items:{},base:0,adj:0};
+  const M=db.months[ym];const c=(M.charges||{})[sid]||{items:{},auto:{},ov:{},base:0,adj:0};
+  const auto=c.auto||c.items,ov=c.ov||{};
+  const ed=adjEdit&&!M.confirmed;
+  const keys=ed?ITEM_KEYS:ITEM_KEYS.filter(k=>c.items[k]||ov[k]);
+  const inpS='margin-left:auto;max-width:118px;text-align:right;padding:6px;font-size:15px';
+  const rows=keys.map(k=>{const v=c.items[k]||0,av=auto[k]||0,isOv=!!ov[k];
+    const tag=isOv?`<div style="font-size:12px;color:#8A5A00">수정됨 · 자동 ${fmt(av)}원</div>`:'';
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:14px;padding:4px 0">
+      <div style="min-width:0"><div style="color:#667085">${invLabel(k,ym)}</div>${tag}</div>
+      ${ed?`<input data-ik="${k}" inputmode="numeric" value="${fmt(v)}" placeholder="0" style="${inpS}${isOv?';border-color:#E0B54A;background:#FFFBEF':''}" onfocus="this.select()" oninput="ovLive('${ym}','${sid}')">
+        ${isOv?`<button class="btn sm" title="자동값으로" style="padding:4px 7px" onclick="ovResetOne('${ym}','${sid}','${k}')">↺</button>`:''}`
+      :`<span style="margin-left:auto;white-space:nowrap;${isOv?'color:#8A5A00;font-weight:700':''}">${fmt(v)}원</span>`}
+    </div>`;}).join('');
+  const hasOv=Object.keys(ov).length>0;
   return `<div style="background:#f6f7fd;border-radius:12px;padding:10px 13px;margin:0 0 10px">
-    ${ITEM_KEYS.filter(k=>c.items[k]).map(k=>`<div style="display:flex;font-size:14px;padding:3px 0"><span style="color:#667085">${invLabel(k,ym)}</span><span style="margin-left:auto;white-space:nowrap">${fmt(c.items[k])}원</span></div>`).join('')}
-    <div style="display:flex;align-items:center;font-size:14px;padding:3px 0"><span style="color:#667085">조정금액</span>
-      ${adjEdit&&!M.confirmed?`<input id="adjAmt" inputmode="numeric" value="${c.adj||0}" style="margin-left:auto;max-width:110px;text-align:right;padding:6px">`:`<span style="margin-left:auto">${fmt(c.adj||0)}원</span>`}</div>
-    <div style="display:flex;font-size:15px;font-weight:800;padding:6px 0 2px;border-top:1px solid #e5e7f0;margin-top:4px"><span>최종 청구액</span><span style="margin-left:auto">${fmt((c.base||0)+(c.adj||0))}원</span></div>
+    ${rows}
+    <div style="display:flex;align-items:center;font-size:14px;padding:4px 0"><span style="color:#667085">조정금액</span>
+      ${ed?`<input id="adjAmt" inputmode="numeric" value="${fmt(c.adj||0)}" style="${inpS}" onfocus="this.select()" oninput="ovLive('${ym}','${sid}')">`:`<span style="margin-left:auto">${fmt(c.adj||0)}원</span>`}</div>
+    <div style="display:flex;font-size:15px;font-weight:800;padding:6px 0 2px;border-top:1px solid #e5e7f0;margin-top:4px"><span>최종 청구액</span><span id="ovTotal" style="margin-left:auto">${fmt((c.base||0)+(c.adj||0))}원</span></div>
+    ${ed?`<div class="muted" style="font-size:13px;margin-top:4px">금액을 바꾼 항목은 재계산해도 유지됩니다 · ↺ 누르면 자동 계산값으로 되돌림</div>`:''}
+    ${M.confirmed?`<div class="muted" style="font-size:13px;margin-top:4px">청구 확정 상태입니다 — 수정하려면 ⋯ 메뉴에서 확정 해제</div>`:''}
     <div class="row mt">
-      ${M.confirmed?'':adjEdit?`<button class="btn primary" style="flex:1;justify-content:center;min-height:44px" onclick="saveAdj('${ym}','${sid}')">조정 저장</button>`
-        :`<button class="btn" style="flex:1;justify-content:center;min-height:44px" onclick="adjEdit=true;render()">조정금액 수정</button>`}
-      <button class="btn" style="min-height:44px" onclick="calcDetailSid=null;adjEdit=false;render()">닫기</button>
+      ${M.confirmed?'':ed?`<button class="btn primary" style="flex:1;justify-content:center;min-height:44px" onclick="saveItemEdit('${ym}','${sid}')">저장</button>
+        ${hasOv?`<button class="btn" style="min-height:44px" onclick="ovResetAll('${ym}','${sid}')">전체 자동값</button>`:''}
+        <button class="btn" style="min-height:44px" onclick="adjEdit=false;render()">취소</button>`
+        :`<button class="btn" style="flex:1;justify-content:center;min-height:44px" onclick="adjEdit=true;render()">항목별 금액 수정</button>
+        <button class="btn" style="min-height:44px" onclick="calcDetailSid=null;adjEdit=false;render()">닫기</button>`}
     </div></div>`;
 }
-function saveAdj(ym,sid){
-  const M=db.months[ym];M.pays=M.pays||{};
-  const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',note:'',adj:0};
-  p.adj=Number(String(document.getElementById('adjAmt').value).replace(/[^0-9-]/g,''))||0;
-  calcMonth(ym);adjEdit=false;save();render();toast('조정금액이 반영되었습니다');
+const numIn=v=>Number(String(v).replace(/[^0-9-]/g,''))||0;
+function ovLive(ym,sid){
+  let t=0;document.querySelectorAll('[data-ik]').forEach(el=>t+=numIn(el.value));
+  const a=document.getElementById('adjAmt');if(a)t+=numIn(a.value);
+  const el=document.getElementById('ovTotal');if(el)el.textContent=fmt(t)+'원';
+}
+function saveItemEdit(ym,sid){
+  const M=db.months[ym];if(M.confirmed)return;
+  const c=(M.charges||{})[sid]||{};const auto=c.auto||c.items||{};
+  M.itemOv=M.itemOv||{};const ov=Object.assign({},M.itemOv[sid]||{});
+  document.querySelectorAll('[data-ik]').forEach(el=>{const k=el.dataset.ik,v=numIn(el.value);
+    if(v===(auto[k]||0))delete ov[k];else ov[k]=v;});
+  if(Object.keys(ov).length)M.itemOv[sid]=ov;else delete M.itemOv[sid];
+  M.pays=M.pays||{};const p=M.pays[sid]=M.pays[sid]||{paid:0,date:'',note:'',adj:0};
+  const a=document.getElementById('adjAmt');if(a)p.adj=numIn(a.value);
+  calcMonth(ym);adjEdit=false;save();render();toast('세부내역이 저장되었습니다');
+}
+function ovResetOne(ym,sid,k){
+  const M=db.months[ym];if(M.confirmed||!M.itemOv||!M.itemOv[sid])return;
+  delete M.itemOv[sid][k];if(!Object.keys(M.itemOv[sid]).length)delete M.itemOv[sid];
+  calcMonth(ym);save();render();toast(invLabel(k,ym)+' 자동값으로 복원');
+}
+function ovResetAll(ym,sid){
+  const M=db.months[ym];if(M.confirmed)return;
+  if(!confirm('이 업체의 수정 항목을 모두 자동 계산값으로 되돌릴까요?'))return;
+  if(M.itemOv)delete M.itemOv[sid];
+  calcMonth(ym);save();render();toast('자동 계산값으로 복원되었습니다');
 }
 function addMeterShop(ym,sid,f){
   const s=db.shops.find(x=>x.id===sid);if(!s)return;
@@ -1327,7 +1375,7 @@ function vSettings(){
   <div class="card"><h2>👤 계정</h2>
     <div class="row"><span class="muted">로그인: <b>${esc(window.fbUserEmail||'')}</b></span>
     <button class="btn sm danger" onclick="window.fbLogout&&window.fbLogout()">로그아웃</button></div>
-    <div class="muted mt">앱 버전 b0715n</div></div>`;
+    <div class="muted mt">앱 버전 b0716a</div></div>`;
 }
 function saveSet(){
   S().buildingName=document.getElementById('setName').value.trim()||'우리상가';
